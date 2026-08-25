@@ -1,0 +1,6 @@
+release/
+com.elgato.twitch.sdPlugin/data/
+com.elgato.twitch.sdPlugin/logs/
+com.elgato.twitch.sdPlugin/launcher-error.log
+com.elgato.twitch.sdPlugin/runtime/node.exe
+com.elgato.twitch.sdPlugin/TwitchLauncher.test.exe

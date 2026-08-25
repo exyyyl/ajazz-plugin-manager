@@ -1,0 +1,28 @@
+# Dependencies and generated output
+**/node_modules/
+**/out/
+**/build/
+**/release/
+**/.vite/
+
+# Packaged binaries and archives
+*.exe
+*.dll
+*.pdb
+*.zip
+*.7z
+
+# Local credentials, logs and runtime data
+**/auth.bin
+**/data/
+**/logs/
+*.log
+
+# Original Elgato plugin files are not redistributed from this repository
+ajazz-twitch-port/com.elgato.twitch.sdPlugin/
+
+# Editor and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
