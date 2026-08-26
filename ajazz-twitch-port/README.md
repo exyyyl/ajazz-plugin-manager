@@ -42,6 +42,7 @@
 
 - `com.elgato.twitch.sdPlugin` — рабочий пакет плагина;
 - `launcher\Program.cs` — автономный загрузчик и DPAPI credential helper;
+- `patches\Apply-PublicClientRefresh.ps1` — воспроизводимый рецепт проверки и обновления refresh token для Public Client;
 - `installer` — установщик для Ajazz;
 - `Build-Release.ps1` — проверка и сборка ZIP.
 

@@ -15,6 +15,7 @@ $runtimeRoot = Join-Path $pluginRoot 'runtime'
 $releaseRoot = Join-Path $projectRoot 'release'
 $stagingRoot = Join-Path $releaseRoot 'Ajazz-Twitch-Installer'
 $zipPath = Join-Path $releaseRoot 'Ajazz-Twitch-Installer.zip'
+$publicClientPatch = Join-Path $projectRoot 'patches\Apply-PublicClientRefresh.ps1'
 
 if (-not (Test-Path -LiteralPath $compiler)) {
     throw "Встроенный компилятор .NET Framework не найден: $compiler"
@@ -22,6 +23,11 @@ if (-not (Test-Path -LiteralPath $compiler)) {
 if (-not (Test-Path -LiteralPath $node)) {
     throw "Node.js не найден: $node"
 }
+if (-not (Test-Path -LiteralPath $publicClientPatch)) {
+    throw "Рецепт Public Client refresh не найден: $publicClientPatch"
+}
+
+& $publicClientPatch -PluginRoot $pluginRoot
 
 Write-Host 'Компилирую автономный загрузчик…'
 & $compiler /nologo /target:exe "/out:$(Join-Path $pluginRoot 'TwitchLauncher.exe')" /reference:System.dll /reference:System.Security.dll $launcherSource
