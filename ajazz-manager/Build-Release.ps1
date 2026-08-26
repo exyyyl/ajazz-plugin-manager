@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^[A-Za-z0-9]{20,64}$')]
-    [string]$ClientId = 'dzp0wgiygq0oyqg39nq7iepak0ytyg'
+    [string]$ClientId = 's8zsg8tto334k3tl1lu3hx71tyr1l6'
 )
 
 $ErrorActionPreference = 'Stop'
