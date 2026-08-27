@@ -16,6 +16,9 @@ $releaseRoot = Join-Path $projectRoot 'release'
 $stagingRoot = Join-Path $releaseRoot 'Ajazz-Twitch-Installer'
 $zipPath = Join-Path $releaseRoot 'Ajazz-Twitch-Installer.zip'
 $publicClientPatch = Join-Path $projectRoot 'patches\Apply-PublicClientRefresh.ps1'
+$ircReliabilityPatch = Join-Path $projectRoot 'patches\Apply-IrcReliability.ps1'
+$ircLifecyclePatch = Join-Path $projectRoot 'patches\Apply-IrcLifecycle.ps1'
+$secureLogoutPatch = Join-Path $projectRoot 'patches\Apply-SecureLogout.ps1'
 
 if (-not (Test-Path -LiteralPath $compiler)) {
     throw "Встроенный компилятор .NET Framework не найден: $compiler"
@@ -26,8 +29,20 @@ if (-not (Test-Path -LiteralPath $node)) {
 if (-not (Test-Path -LiteralPath $publicClientPatch)) {
     throw "Рецепт Public Client refresh не найден: $publicClientPatch"
 }
+if (-not (Test-Path -LiteralPath $ircReliabilityPatch)) {
+    throw "Рецепт Twitch IRC reliability не найден: $ircReliabilityPatch"
+}
+if (-not (Test-Path -LiteralPath $ircLifecyclePatch)) {
+    throw "Рецепт Twitch IRC lifecycle не найден: $ircLifecyclePatch"
+}
+if (-not (Test-Path -LiteralPath $secureLogoutPatch)) {
+    throw "Рецепт безопасного выхода Twitch не найден: $secureLogoutPatch"
+}
 
 & $publicClientPatch -PluginRoot $pluginRoot
+& $ircReliabilityPatch -PluginRoot $pluginRoot
+& $ircLifecyclePatch -PluginRoot $pluginRoot
+& $secureLogoutPatch -PluginRoot $pluginRoot
 
 Write-Host 'Компилирую автономный загрузчик…'
 & $compiler /nologo /target:exe "/out:$(Join-Path $pluginRoot 'TwitchLauncher.exe')" /reference:System.dll /reference:System.Security.dll $launcherSource

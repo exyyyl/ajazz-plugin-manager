@@ -13,6 +13,32 @@ $source = [IO.Path]::GetFullPath($PluginSource)
 $targetFull = [IO.Path]::GetFullPath($target)
 $pluginsRootFull = [IO.Path]::GetFullPath($pluginsRoot) + [IO.Path]::DirectorySeparatorChar
 
+function Remove-BackupCredentials {
+    param([Parameter(Mandatory = $true)][string]$BackupRoot)
+
+    if (-not (Test-Path -LiteralPath $BackupRoot)) {
+        return 0
+    }
+
+    $backupRootFull = [IO.Path]::GetFullPath($BackupRoot) + [IO.Path]::DirectorySeparatorChar
+    $removed = 0
+    Get-ChildItem -LiteralPath $BackupRoot -Directory -Filter "$pluginName-*" -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            $backupDirectory = $_.FullName
+            foreach ($fileName in @('auth.bin', 'auth.bin.bak', 'auth.bin.tmp')) {
+                $candidate = [IO.Path]::GetFullPath((Join-Path $backupDirectory "data\$fileName"))
+                if (-not $candidate.StartsWith($backupRootFull, [StringComparison]::OrdinalIgnoreCase)) {
+                    throw "Unsafe backup credential path: $candidate"
+                }
+                if (Test-Path -LiteralPath $candidate) {
+                    Remove-Item -LiteralPath $candidate -Force
+                    $removed++
+                }
+            }
+        }
+    return $removed
+}
+
 if (-not $targetFull.StartsWith($pluginsRootFull, [StringComparison]::OrdinalIgnoreCase)) {
     throw "Unsafe plugin target: $targetFull"
 }
@@ -53,6 +79,7 @@ Start-Sleep -Milliseconds 800
 
 New-Item -ItemType Directory -Path $pluginsRoot -Force | Out-Null
 $preserveCredential = $false
+$preservedCredentialHash = $null
 if (Test-Path -LiteralPath $targetFull) {
     $oldCredential = Join-Path $targetFull 'data\auth.bin'
     $oldConfig = Join-Path $targetFull 'auth-config.json'
@@ -60,6 +87,9 @@ if (Test-Path -LiteralPath $targetFull) {
         try {
             $oldClientId = [string](Get-Content -LiteralPath $oldConfig -Raw | ConvertFrom-Json).clientId
             $preserveCredential = $oldClientId -eq $ClientId
+            if ($preserveCredential) {
+                $preservedCredentialHash = (Get-FileHash -LiteralPath $oldCredential -Algorithm SHA256).Hash
+            }
         }
         catch {
             $preserveCredential = $false
@@ -93,6 +123,18 @@ else {
 $manifest = Get-Content -LiteralPath (Join-Path $targetFull 'manifest.json') -Raw | ConvertFrom-Json
 if ($manifest.Actions.Count -ne 16) {
     throw "Проверка установки не пройдена: ожидалось 16 действий, найдено $($manifest.Actions.Count)."
+}
+if ($preserveCredential) {
+    $installedCredential = Join-Path $installedData 'auth.bin'
+    if (-not (Test-Path -LiteralPath $installedCredential) -or
+        (Get-FileHash -LiteralPath $installedCredential -Algorithm SHA256).Hash -ne $preservedCredentialHash) {
+        throw 'Проверка установки не пройдена: защищённая Twitch-сессия не была перенесена.'
+    }
+}
+
+$removedBackupCredentials = Remove-BackupCredentials -BackupRoot (Join-Path $streamDockRoot 'plugin-backups')
+if ($removedBackupCredentials -gt 0) {
+    Write-Host "Удалены защищённые auth.bin из резервных копий: $removedBackupCredentials"
 }
 
 Write-Host 'Запускаю Stream Dock AJAZZ…'
