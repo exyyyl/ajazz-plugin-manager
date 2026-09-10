@@ -1,4 +1,5 @@
-release/
+release/*
+!release/Ajazz-Twitch-Setup.exe
 com.elgato.twitch.sdPlugin/data/
 com.elgato.twitch.sdPlugin/logs/
 com.elgato.twitch.sdPlugin/launcher-error.log

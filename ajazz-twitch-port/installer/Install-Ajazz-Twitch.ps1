@@ -1,10 +1,13 @@
 [CmdletBinding()]
 param(
     [string]$ClientId,
-    [string]$PluginSource = (Join-Path $PSScriptRoot 'plugin')
+    [string]$PluginSource
 )
 
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($PluginSource)) {
+    $PluginSource = Join-Path $PSScriptRoot 'plugin'
+}
 $pluginName = 'com.elgato.twitch.sdPlugin'
 $streamDockRoot = Join-Path $env:APPDATA 'HotSpot\StreamDock'
 $pluginsRoot = Join-Path $streamDockRoot 'plugins'
@@ -132,9 +135,16 @@ if ($preserveCredential) {
     }
 }
 
-$removedBackupCredentials = Remove-BackupCredentials -BackupRoot (Join-Path $streamDockRoot 'plugin-backups')
-if ($removedBackupCredentials -gt 0) {
-    Write-Host "Удалены защищённые auth.bin из резервных копий: $removedBackupCredentials"
+if ($preserveCredential) {
+    # Remove backup copies only after the installed credential exists and its
+    # hash matches the source. Failed or incompatible migrations stay recoverable.
+    $removedBackupCredentials = Remove-BackupCredentials -BackupRoot (Join-Path $streamDockRoot 'plugin-backups')
+    if ($removedBackupCredentials -gt 0) {
+        Write-Host "Удалены защищённые auth.bin из резервных копий: $removedBackupCredentials"
+    }
+}
+elseif ($backup -and (Test-Path -LiteralPath (Join-Path $backup 'data\auth.bin'))) {
+    Write-Warning "Старая Twitch-сессия не перенесена; её защищённая копия сохранена до успешного нового входа: $backup"
 }
 
 Write-Host 'Запускаю Stream Dock AJAZZ…'

@@ -26,3 +26,9 @@ ajazz-twitch-port/com.elgato.twitch.sdPlugin/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Publish only the verified one-click Twitch installer. Other generated release
+# files and executables remain ignored.
+!ajazz-twitch-port/release/
+ajazz-twitch-port/release/*
+!ajazz-twitch-port/release/Ajazz-Twitch-Setup.exe
