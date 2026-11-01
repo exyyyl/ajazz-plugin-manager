@@ -103,7 +103,7 @@ internal static class Program
             "compatibility.cjs",
             "ru.json",
             "Localize-Profiles.ps1",
-            Path.Combine("runtime", "node.exe")
+            Path.Combine(File.Exists(Path.Combine(root, "plugin", "manifest.json")) ? "plugin" : "runtime", "node.exe")
         };
 
         foreach (string relativePath in requiredFiles)

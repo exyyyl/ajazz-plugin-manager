@@ -1,18 +1,27 @@
 param(
     [string]$PluginRoot = "$env:APPDATA\HotSpot\StreamDock\plugins",
     [string]$BackupRoot = "$env:APPDATA\AjazzPluginManager\Backups",
+    [string]$Source = "$env:APPDATA\Elgato\StreamDeck\Plugins\com.elgato.discord.sdPlugin",
     [switch]$NoRestart
 )
 $ErrorActionPreference = 'Stop'
 $destination = Join-Path $PluginRoot 'com.elgato.discord.sdPlugin'
-$nodePath = Join-Path $PSScriptRoot 'runtime\node.exe'
-if (!(Test-Path -LiteralPath $nodePath)) { $nodePath = (Get-Command node -ErrorAction Stop).Source }
 $stageRoot = Join-Path ([IO.Path]::GetTempPath()) ('AjazzDiscord-' + [Guid]::NewGuid().ToString('N'))
 $package = Join-Path $stageRoot 'com.elgato.discord.sdPlugin'
 $backup = $null
 $appPath = $null
 try {
-    & "$PSScriptRoot\Build-Plugin.ps1" -Destination $package -NodePath $nodePath
+    $bundled = Join-Path $PSScriptRoot 'plugin'
+    if (Test-Path -LiteralPath "$bundled\manifest.json") {
+        foreach ($required in @('ESDDiscord.exe','AjazzDiscord.exe','node.exe','bridge.cjs','compatibility.cjs','ru.json')) {
+            if (!(Test-Path -LiteralPath "$bundled\$required")) { throw "Incomplete bundled plugin: $required" }
+        }
+        $package = $bundled
+    } else {
+        $nodePath = Join-Path $PSScriptRoot 'runtime\node.exe'
+        if (!(Test-Path -LiteralPath $nodePath)) { $nodePath = (Get-Command node -ErrorAction Stop).Source }
+        & "$PSScriptRoot\Build-Plugin.ps1" -Source $Source -Destination $package -NodePath $nodePath
+    }
     if (Test-Path -LiteralPath $destination) {
         New-Item -ItemType Directory -Path $BackupRoot -Force | Out-Null
         $backup = Join-Path $BackupRoot ('discord-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
