@@ -1,0 +1,98 @@
+{
+  "Description": "Управление музыкой Trula",
+  "Icon": "images/trula",
+  "CodePathWin": "TrulaPlugin.exe",
+  "Author": "projectDECK",
+  "CategoryIcon": "images/trula",
+  "Version": "0.2.0",
+  "OS": [
+    {
+      "MinimumVersion": "10",
+      "Platform": "windows"
+    }
+  ],
+  "Category": "Trula",
+  "Name": "Trula",
+  "Software": {
+    "MinimumVersion": "2.10"
+  },
+  "SDKVersion": 1,
+  "Actions": [
+    {
+      "PropertyInspectorPath": "inspector.html",
+      "UUID": "com.projectdeck.trula.playback",
+      "UserTitleEnabled": false,
+      "Tooltip": "Остановить или продолжить музыку Trula на всех выходах",
+      "SupportedInMultiActions": false,
+      "Icon": "images/trula",
+      "Name": "Музыка: пуск / пауза",
+      "States": [
+        {
+          "TitleAlignment": "middle",
+          "Image": "images/trula",
+          "FontSize": "11"
+        }
+      ],
+      "Controllers": [
+        "Keypad"
+      ]
+    },
+    {
+      "PropertyInspectorPath": "inspector.html",
+      "UUID": "com.projectdeck.trula.stream",
+      "UserTitleEnabled": false,
+      "Tooltip": "Выключить или вернуть музыку в источнике OBS",
+      "SupportedInMultiActions": false,
+      "Icon": "images/trula",
+      "Name": "Звук на стриме",
+      "States": [
+        {
+          "TitleAlignment": "middle",
+          "Image": "images/trula",
+          "FontSize": "11"
+        }
+      ],
+      "Controllers": [
+        "Keypad"
+      ]
+    },
+    {
+      "PropertyInspectorPath": "inspector.html",
+      "UUID": "com.projectdeck.trula.monitor",
+      "UserTitleEnabled": false,
+      "Tooltip": "Выключить или вернуть музыку в док-панели стримера",
+      "SupportedInMultiActions": false,
+      "Icon": "images/trula",
+      "Name": "Звук у стримера",
+      "States": [
+        {
+          "TitleAlignment": "middle",
+          "Image": "images/trula",
+          "FontSize": "11"
+        }
+      ],
+      "Controllers": [
+        "Keypad"
+      ]
+    },
+    {
+      "PropertyInspectorPath": "inspector.html",
+      "UUID": "com.projectdeck.trula.control",
+      "UserTitleEnabled": false,
+      "Tooltip": "Громкость, треки и настройки Trula",
+      "SupportedInMultiActions": false,
+      "Icon": "images/trula",
+      "Name": "Дополнительное управление",
+      "States": [
+        {
+          "TitleAlignment": "middle",
+          "Image": "images/trula",
+          "FontSize": "11"
+        }
+      ],
+      "Controllers": [
+        "Keypad"
+      ]
+    }
+  ]
+}
