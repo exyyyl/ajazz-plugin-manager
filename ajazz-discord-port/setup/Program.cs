@@ -101,6 +101,8 @@ internal static class Program
             "Launcher.cs",
             "bridge.cjs",
             "compatibility.cjs",
+            "ru.json",
+            "Localize-Profiles.ps1",
             Path.Combine("runtime", "node.exe")
         };
 

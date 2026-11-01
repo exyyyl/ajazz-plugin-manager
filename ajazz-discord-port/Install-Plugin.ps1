@@ -36,6 +36,9 @@ try {
         throw
     }
     Write-Output "Installed: $destination"
+    if ([IO.Path]::GetFullPath($PluginRoot) -eq [IO.Path]::GetFullPath($defaultRoot)) {
+        & "$PSScriptRoot\Localize-Profiles.ps1" -PluginPath $destination -ProfileRoot "$env:APPDATA\HotSpot\StreamDock\profiles" -BackupRoot (Join-Path $BackupRoot ('discord-profiles-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff')))
+    }
     Write-Output 'Add a Discord action in AJAZZ, click Request access and approve it in Discord.'
 } finally {
     if ($appPath -and !$NoRestart) { Start-Process -FilePath $appPath -WorkingDirectory (Split-Path $appPath) -WindowStyle Hidden }

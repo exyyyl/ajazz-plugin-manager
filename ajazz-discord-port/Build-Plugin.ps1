@@ -9,7 +9,7 @@ if (!$NodePath -or !(Test-Path -LiteralPath $NodePath)) { throw 'Node.js 22+ run
 $nodeVersion = & $NodePath --version
 if ($LASTEXITCODE -ne 0 -or $nodeVersion -notmatch '^v(\d+)\.' -or [int]$Matches[1] -lt 22) { throw 'Node.js 22+ runtime is required.' }
 if (Test-Path -LiteralPath $Destination) { throw "Destination already exists: $Destination" }
-$localization = Get-Content -LiteralPath "$Source\en.json" -Raw | ConvertFrom-Json
+$localization = Get-Content -LiteralPath "$PSScriptRoot\ru.json" -Raw -Encoding UTF8 | ConvertFrom-Json
 $definitions = @(
     @('mute','mute','mute_0','mute_1'),
     @('deafen','deafen','deafen_0','deafen_1'),
@@ -30,9 +30,13 @@ $definitions = @(
 $actions = foreach ($definition in $definitions) {
     $id = "com.elgato.discord.$($definition[0])"
     $entry = $localization.$id
+    $stateIndex = 0
     $states = foreach ($image in $definition[2..($definition.Length - 1)]) {
         if (!(Test-Path -LiteralPath "$Source\images\actions\$image.svg")) { throw "Missing image: $image" }
-        @{ Image = "images/actions/$image"; TitleAlignment = 'bottom'; FontSize = '12' }
+        $state = @{ Image = "images/actions/$image"; TitleAlignment = 'bottom'; FontSize = '12' }
+        if ($entry.States -and $stateIndex -lt $entry.States.Count) { $state.Name = $entry.States[$stateIndex].Name }
+        $stateIndex++
+        $state
     }
     @{
         UUID = $id; Name = $entry.Name; Tooltip = $entry.Tooltip
@@ -45,7 +49,7 @@ $actions = foreach ($definition in $definitions) {
 $version = (Get-Item -LiteralPath "$Source\ESDDiscord.exe").VersionInfo.FileVersion
 if (!$version) { $version = '1.0.0' }
 $manifest = @{
-    UUID = 'com.elgato.discord'; Name = 'Discord'; Description = 'Control Discord (experimental AJAZZ port).'
+    UUID = 'com.elgato.discord'; Name = 'Discord'; Description = $localization.Description
     Author = 'Elgato'; Version = $version; SDKVersion = 2
     CodePath = 'AjazzDiscord.exe'; CodePathWin = 'AjazzDiscord.exe'
     Icon = 'images/plugin'; Category = 'Discord'; CategoryIcon = 'images/category'
@@ -62,6 +66,14 @@ foreach ($locale in @('en','de','es','fr','ja','ko','zh_CN','zh_TW')) {
     if (Test-Path -LiteralPath "$Source\$locale.json") { Copy-Item -LiteralPath "$Source\$locale.json" -Destination $Destination }
 }
 $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath "$Destination\manifest.json" -Encoding utf8
+Copy-Item -LiteralPath "$PSScriptRoot\ru.json" -Destination $Destination
+# This distribution provides Russian UI even when AJAZZ reports another language.
+$inspectorMain = Join-Path $Destination 'inspectors\main.js'
+$inspectorCode = [IO.File]::ReadAllText($inspectorMain)
+$languageSelection = "var language = info['application']['language'];"
+if (!$inspectorCode.Contains($languageSelection)) { throw 'Unsupported inspector language initialization. Update the localization patch.' }
+$inspectorCode = $inspectorCode.Replace($languageSelection, "var language = 'ru';")
+[IO.File]::WriteAllText($inspectorMain, $inspectorCode, (New-Object Text.UTF8Encoding($false)))
 Copy-Item -LiteralPath "$PSScriptRoot\bridge.cjs" -Destination $Destination
 Copy-Item -LiteralPath "$PSScriptRoot\compatibility.cjs" -Destination $Destination
 Copy-Item -LiteralPath $NodePath -Destination "$Destination\node.exe"

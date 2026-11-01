@@ -78,6 +78,12 @@ const server = net.createServer(socket => {
 });
 server.listen(0, '127.0.0.1', () => {
   const childArgs = args.slice(); childArgs[portIndex] = String(server.address().port);
+  const infoIndex = childArgs.indexOf('-info') + 1;
+  if (infoIndex) {
+    const info = JSON.parse(childArgs[infoIndex]);
+    if (info.application) info.application.language = 'ru';
+    childArgs[infoIndex] = JSON.stringify(info);
+  }
   child = spawn(path.join(__dirname, 'ESDDiscord.exe'), childArgs, { cwd: __dirname, windowsHide: true });
   child.on('error', e => { log('launch ' + e.code); process.exit(1); });
   child.on('exit', code => { log('exit ' + code); process.exit(code || 0); });

@@ -9,13 +9,13 @@ if ($LASTEXITCODE -ne 0) { throw 'Bridge syntax check failed.' }
 $releaseRoot = Join-Path $PSScriptRoot 'release'
 $stage = Join-Path $PSScriptRoot ('build\release-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path "$stage\runtime",$releaseRoot -Force | Out-Null
-foreach ($file in @('Build-Plugin.ps1','Install-Plugin.ps1','Launcher.cs','bridge.cjs','compatibility.cjs','README.md')) {
+foreach ($file in @('Build-Plugin.ps1','Install-Plugin.ps1','Localize-Profiles.ps1','Launcher.cs','bridge.cjs','compatibility.cjs','ru.json','README.md')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination $stage
 }
 Copy-Item -LiteralPath $nodePath -Destination "$stage\runtime\node.exe"
 Copy-Item -LiteralPath "$PSScriptRoot\..\ajazz-twitch-port\third-party\NODE-LICENSE.txt" -Destination "$stage\runtime\NODE-LICENSE.txt"
 $utf8Bom = New-Object Text.UTF8Encoding($true)
-foreach ($file in @('Build-Plugin.ps1','Install-Plugin.ps1')) {
+foreach ($file in @('Build-Plugin.ps1','Install-Plugin.ps1','Localize-Profiles.ps1')) {
     $full = Join-Path $stage $file
     [IO.File]::WriteAllText($full, [IO.File]::ReadAllText($full), $utf8Bom)
 }
