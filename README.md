@@ -7,6 +7,7 @@
 - `ajazz-manager-electron` — новый интерфейс на Electron, React, TypeScript, TanStack и shadcn/ui;
 - `ajazz-manager` — первая рабочая WinForms-версия;
 - `ajazz-twitch-port` — launcher, установочные скрипты и документация порта Twitch.
+- `ajazz-discord-port` — однокликовый импорт локального Discord-плагина Elgato в AJAZZ с адаптером событий кнопок.
 
 Основная разработка ведётся в Electron-версии. Она обнаруживает локальные плагины Elgato и AJAZZ, включая пакеты с защищёнными манифестами, а также индексирует иконки по источникам, наборам и подпапкам.
 
