@@ -53,7 +53,7 @@ public static class Commands {
         }
         if (action == "com.projectdeck.trula.playback") {
             string selected=Json.Text(settings,"musicCommand","togglePlay");
-            effective["command"] = new[]{"togglePlay","nextTrack","prevTrack"}.Contains(selected)?selected:"togglePlay";
+            effective["command"] = new[]{"togglePlay","nextTrack","prevTrack","skipOrder"}.Contains(selected)?selected:"togglePlay";
         }
         if (action == "com.projectdeck.trula.next") effective["command"] = "nextTrack";
         if (action == "com.projectdeck.trula.previous") effective["command"] = "prevTrack";
@@ -189,7 +189,7 @@ public class TrulaPlugin {
     async Task Status(string context, string message) { await Send("sendToPropertyInspector",context,new {message,connected=!string.IsNullOrEmpty(Credentials.Read()),trulaReady=obsReady,twitchAccount=TwitchChat.AccountLabel(),twitchConnected=TwitchChat.IsConnected()}); }
     async Task Artwork(string context,Dictionary<string,object> cfg,Dictionary<string,object> state,bool error=false) {
         string command=Json.Text(cfg,"command"), output=Json.Text(cfg,"output");
-        string kind=command=="sendTrackToChat"?"chat":command=="nextTrack"?"next":command=="prevTrack"?"previous":command=="togglePlay"?"music":command=="mute" && output=="source"?"stream":command=="mute" && output=="panel"?"monitor":"control";
+        string kind=command=="sendTrackToChat"?"chat":command=="skipOrder"?"skip":command=="nextTrack"?"next":command=="prevTrack"?"previous":command=="togglePlay"?"music":command=="mute" && output=="source"?"stream":command=="mute" && output=="panel"?"monitor":"control";
         bool active=!error; string caption="ГОТОВО";
         if(new[]{"volumeToggle","volumeUp","volumeDown"}.Contains(command)) kind=output=="panel"?"monitor-volume":"stream-volume";
         if(error) caption="НЕТ СВЯЗИ";
@@ -223,7 +223,7 @@ public class TrulaPlugin {
                 if (!globalsLoaded) throw new Exception("Загрузка настроек. Повторите нажатие.");
                 string command = Json.Text(cfg,"command","mute");
                 if(command=="sendTrackToChat") {await TwitchChat.Send(state,cfg);}
-                else if (new[]{"togglePlay","nextTrack","prevTrack"}.Contains(command)) {
+                else if (new[]{"togglePlay","nextTrack","prevTrack","skipOrder"}.Contains(command)) {
                     if (command=="togglePlay" && Json.Text(state,"hasTrack")=="False") throw new Exception("Очередь Trula пуста. Добавьте трек в панели.");
                     state = await bridge.Call(token,new {command});
                 } else {
@@ -278,7 +278,7 @@ public class TrulaPlugin {
                         }
                         await Status(ctx,"Подключение сброшено. Можно подключить Trula заново.");
                     }
-                    else if(command=="startObs") {string note="OBS запускается.";try {bridge.StartObs();}catch(Exception ex){note=ex.Message;}await Status(ctx,note);}
+                    else if(command=="startObs") {string note="OBS запускается.";try {note=await bridge.StartObs();}catch(Exception ex){note=ex.Message;}await Status(ctx,note);}
                     Diagnostics.Write("inspector "+command);
                 }
             }
@@ -302,7 +302,7 @@ public class TrulaPlugin {
         }
         if (ev=="sendToPlugin" && payload.ContainsKey("startObs")) {
             string message="OBS запущен. Дождитесь загрузки док-панели Trula.";
-            try { bridge.StartObs(); } catch(Exception ex) { message=ex.Message; }
+            try { message=await bridge.StartObs(); } catch(Exception ex) { message=ex.Message; }
             await Status(ctx,message); return;
         }
         var effective = Commands.Configure(actionId,Json.Child(payload,"settings"));
@@ -355,15 +355,19 @@ public class TrulaPlugin {
         // Opening account UI must never wait behind failed OBS requests.
         var received=Json.Child(Json.Child(message,"payload"),"settings");
         var ui=Json.Child(received,"uiRequest");
-        if(ev=="didReceiveSettings" && new[]{"openConnection","openTwitch"}.Contains(Json.Text(ui,"command"))) {
+        if(ev=="didReceiveSettings" && new[]{"openConnection","openTwitch","startObs"}.Contains(Json.Text(ui,"command"))) {
             string id=Json.Text(ui,"id");bool fresh;lock(uiRequests) {fresh=uiRequests.Add(id);}
             received.Remove("uiRequest");
             try {
                 await Send("setSettings",context,received);
                 double created,now=(DateTime.UtcNow-new DateTime(1970,1,1)).TotalMilliseconds;
                 if(fresh && double.TryParse(Json.Text(ui,"created"),out created) && Math.Abs(now-created)<30000) {
-                    if(Json.Text(ui,"command")=="openTwitch") TwitchWindow.Open();else ConnectionWindow.Open();
-                    await Status(context,"Окно подключения открыто.");Diagnostics.Write("account window requested");
+                    string note="Окно подключения открыто.";
+                    if(Json.Text(ui,"command")=="startObs") {
+                        try {note=await bridge.StartObs();}catch(Exception ex){note=ex.Message;}
+                        await Send("sendToPropertyInspector",context,new {obsLaunchMessage=note});
+                    }else if(Json.Text(ui,"command")=="openTwitch") TwitchWindow.Open();else ConnectionWindow.Open();
+                    await Status(context,note);Diagnostics.Write("inspector window requested");
                 }
             }catch {Diagnostics.Write("account UI failed");}
             return;

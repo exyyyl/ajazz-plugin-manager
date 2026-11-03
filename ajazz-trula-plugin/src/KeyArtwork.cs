@@ -41,6 +41,10 @@ public static class KeyArtwork {
                         g.DrawEllipse(pen,57,34,30,30);
                         g.DrawArc(pen,39,76,66,52,180,180);
                         g.DrawLine(pen,39,102,105,102);
+                    } else if(kind=="skip") {
+                        g.FillPolygon(white,new[]{new Point(35,41),new Point(35,103),new Point(77,72)});
+                        g.DrawLine(pen,91,43,91,101);
+                        g.DrawLine(pen,109,99,127,117);g.DrawLine(pen,127,99,109,117);
                     } else if(kind=="next" || kind=="previous") {
                         if(kind=="previous") {g.TranslateTransform(144,0);g.ScaleTransform(-1,1);}
                         g.FillPolygon(white,new[]{new Point(40,39),new Point(40,105),new Point(88,72)});

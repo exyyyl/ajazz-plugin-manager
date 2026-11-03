@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
 const vm=require('node:vm');
 const script=readFileSync(require('node:path').join(__dirname,'../plugin/obs-player.js'),'utf8');
-function fixture(overlay=false) {
+function fixture(overlay=false,deleteOk=true) {
   const settings={panel:{orderVolume:5,playlistVolume:7},source:{orderVolume:50,playlistVolume:50}};
   const playback={isPlaying:false,isStarted:false,startTime:0};
   const player={state:{currentTrack:{id:'first'}},dispatch({type}){playback.isPlaying=type==='PLAY';},setNextTrack(){player.state.currentTrack={id:'next'};},setPrevTrack(){player.state.currentTrack={id:'previous'};}};
@@ -15,7 +15,7 @@ function fixture(overlay=false) {
   fibers.forEach((fiber,i)=>fiber.sibling=fibers[i+1]);
   const root={child:fibers[0]}, container={__reactContainer$test:{stateNode:{current:root}}};
   const location={origin:'https://trula.io',pathname:'/cp/events',href:'https://trula.io/cp/events?token=test'};
-  const context=vm.createContext({location,URL,document:{querySelectorAll:()=>[container]},setTimeout,fetch:async(url,options)=>{assert.equal(url,'/api/v1/widget/panel/');assert.equal(options.headers.token,'test');pending=JSON.parse(options.body);return {ok:true};}});
+  const context=vm.createContext({location,URL,document:{querySelectorAll:()=>[container]},setTimeout,fetch:async(url,options)=>{if(url==='/api/v1/widget/panel/orders/actions/delete'){assert.equal(options.method,'POST');assert.deepEqual(JSON.parse(options.body),{orderId:'first'});return {ok:deleteOk};}assert.equal(url,'/api/v1/widget/panel/');assert.equal(options.headers.token,'test');pending=JSON.parse(options.body);return {ok:true};}});
   return {run:vm.runInContext('('+script+')',context),settings,playback,location,root,player};
 }
 test('reads the mounted OBS player and follows manual changes',async()=>{
@@ -49,4 +49,10 @@ test('missing providers fail without creating a player',async()=>{
 test('exports only public track metadata for the chat action',async()=>{
   const f=fixture();f.player.state.currentTrack.track={title:'Starboy',platform:'youtube',externalId:'dMMUH_ZpbB0',privateToken:'never-export'};
   const state=await f.run('test','read');assert.equal(state.track.title,'Starboy');assert.equal(state.track.externalId,'dMMUH_ZpbB0');assert.equal('privateToken' in state.track,false);
+});
+
+test('skip removes current order and advances, never removes playlist tracks',async()=>{
+ const f=fixture();await f.run('test','skipOrder');assert.equal(f.player.state.currentTrack.id,'next');
+ const playlist=fixture();playlist.player.state.currentTrack.playlist={id:1};await assert.rejects(playlist.run('test','skipOrder'),/не играет заказ/);assert.equal(playlist.player.state.currentTrack.id,'first');
+ const failed=fixture(false,false);await assert.rejects(failed.run('test','skipOrder'),/не подтвердила/);assert.equal(failed.player.state.currentTrack.id,'first');
 });

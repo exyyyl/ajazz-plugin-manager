@@ -43,6 +43,12 @@ async function(token,command,patch) {
     if(!initial.player.state.currentTrack) throw Error('No track');
     expected=!initial.playback.isPlaying;
     initial.player.dispatch({type:expected?'PLAY':'PAUSE'});
+  } else if(command==='skipOrder') {
+    const current=initial.player.state.currentTrack;
+    if(!current || current.playlist || !current.id) throw Error('Сейчас не играет заказ из очереди.');
+    const response=await fetch('/api/v1/widget/panel/orders/actions/delete',{method:'POST',headers:{token,'Content-Type':'application/json'},body:JSON.stringify({orderId:current.id})});
+    if(!response.ok) throw Error('Trula не подтвердила удаление заказа из очереди.');
+    if(contexts().player.state.currentTrack?.id===current.id) initial.player.setNextTrack();
   } else if(command==='nextTrack') initial.player.setNextTrack();
   else if(command==='prevTrack') initial.player.setPrevTrack();
   else if(command!=='read') throw Error('Unknown command');

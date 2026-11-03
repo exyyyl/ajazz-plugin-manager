@@ -13,7 +13,7 @@ function connectElgatoStreamDeckSocket(port,uuid,registerEvent,info,actionInfo){
  socket=new WebSocket('ws://127.0.0.1:'+port);
  socket.onopen=()=>{socket.send(JSON.stringify({event:registerEvent,uuid}));setTimeout(()=>send({getConnection:true,settings}),200);};
  socket.onclose=()=>{document.getElementById('status').textContent='StreamDock отключён.';renderChatStatus({connected:false,trulaReady:false,twitchConnected:false,message:'StreamDock отключён.'});};
- socket.onmessage=e=>{const m=JSON.parse(e.data);if(m.event==='didReceiveSettings'){settings=m.payload.settings||{};loadChatSettings();}if(m.event==='sendToPropertyInspector'){if(m.payload.message)document.getElementById('status').textContent=m.payload.message;if(typeof m.payload.connected==='boolean')renderTrulaAccount(m.payload);if(typeof m.payload.twitchConnected==='boolean'){document.getElementById('twitch-connect').hidden=m.payload.twitchConnected;document.getElementById('twitch-disconnect').hidden=!m.payload.twitchConnected;renderTwitchAccount(m.payload);}renderChatStatus(m.payload);}};
+ socket.onmessage=e=>{const m=JSON.parse(e.data);if(m.event==='didReceiveSettings'){settings=m.payload.settings||{};loadChatSettings();}if(m.event==='sendToPropertyInspector'){if(m.payload.obsLaunchMessage){const feedback=document.getElementById('obs-launch-feedback');feedback.hidden=false;feedback.textContent=m.payload.obsLaunchMessage;}if(m.payload.message)document.getElementById('status').textContent=m.payload.message;if(typeof m.payload.connected==='boolean')renderTrulaAccount(m.payload);if(typeof m.payload.twitchConnected==='boolean'){document.getElementById('twitch-connect').hidden=m.payload.twitchConnected;document.getElementById('twitch-disconnect').hidden=!m.payload.twitchConnected;renderTwitchAccount(m.payload);}renderChatStatus(m.payload);}};
 }
 function connectSocket(...args){connectElgatoStreamDeckSocket(...args);}
 function request(command,message){
@@ -25,7 +25,7 @@ function request(command,message){
  socket.send(JSON.stringify({event:'setSettings',context:inspectorId,payload:{...settings,uiRequest}}));
 }
 document.getElementById('connect').onclick=()=>request('openConnection','Открываю окно подключения…');
-document.getElementById('obs').onclick=()=>request('startObs','Проверяю запуск OBS…');
+document.getElementById('obs').onclick=()=>{const feedback=document.getElementById('obs-launch-feedback');feedback.hidden=false;feedback.textContent='Проверяю запуск OBS…';request('startObs','Проверяю запуск OBS…');};
 document.getElementById('reset').onclick=()=>request('resetConnection','Сбрасываю подключение…');
 function loadChatSettings(){renderDescription();document.getElementById('message-format').value=settings.messageFormat||'both';document.getElementById('music-command').value=settings.musicCommand||'togglePlay';
  document.getElementById('first-level').value=settings.firstLevel??50;document.getElementById('second-level').value=settings.secondLevel??10;
@@ -99,7 +99,7 @@ function renderChatStatus(payload){
 function renderDescription(){
  const kind=(action||'').split('.').pop();
  const descriptions={
-  playback:({togglePlay:'Приостанавливает музыку в панели Trula в OBS. Повторное нажатие продолжает воспроизведение.',nextTrack:'Переключает музыку на следующий трек в панели Trula в OBS.',prevTrack:'Переключает музыку на предыдущий трек в панели Trula в OBS.'})[settings.musicCommand||'togglePlay'],
+  playback:({togglePlay:'Приостанавливает музыку в панели Trula в OBS. Повторное нажатие продолжает воспроизведение.',nextTrack:'Переключает музыку на следующий трек в панели Trula в OBS.',skipOrder:'Удаляет текущий заказ из очереди Trula и включает следующий трек. Баллы канала не возвращаются. Если играет плейлист, очередь не меняется.',prevTrack:'Переключает музыку на предыдущий трек в панели Trula в OBS.'})[settings.musicCommand||'togglePlay'],
   stream:'Выключает музыку Trula на стриме. Повторное нажатие возвращает прежнюю громкость. Звук у вас не меняется.',
   monitor:'Выключает музыку в вашей панели Trula. Повторное нажатие возвращает прежнюю громкость. Звук на стриме не меняется.',
   streamlevels:'Переключает громкость музыки на стриме между уровнями 1 и 2. Если текущая громкость отличается от уровня 1, нажатие устанавливает уровень 1. Звук у вас не меняется.',
