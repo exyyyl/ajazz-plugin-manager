@@ -12,7 +12,51 @@ Get-Process TrulaPlugin -ErrorAction SilentlyContinue | Where-Object Path -eq "$
 try {
     if (Test-Path -LiteralPath $destination) { Copy-Item -LiteralPath $destination -Destination "$backup\plugin" -Recurse }
     New-Item -ItemType Directory -Path $destination -Force | Out-Null
-    Get-ChildItem -LiteralPath $source | Copy-Item -Destination $destination -Recurse -Force
+    foreach ($name in @('TrulaPlugin.exe','manifest.json','obs-player.js','twitch-config.json','inspector.js','inspector.html','images')) {
+        Copy-Item -LiteralPath (Join-Path $source $name) -Destination $destination -Recurse -Force
+    }
+    foreach ($obsolete in @('bridge.js','Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll','WebView2Loader.dll','WEBVIEW2-LICENSE.txt','WEBVIEW2-NOTICE.txt','TrulaTests.exe')) {
+        $obsoletePath = Join-Path $destination $obsolete
+        if (Test-Path -LiteralPath $obsoletePath -PathType Leaf) { Remove-Item -LiteralPath $obsoletePath }
+    }
+    # Update only the old bundled Trula artwork; preserve custom images and other actions.
+    $manifest = Get-Content "$destination\manifest.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+    $profilesRoot = "$env:APPDATA\HotSpot\StreamDock\profiles"
+    if (Test-Path -LiteralPath $profilesRoot) {
+        foreach ($folder in Get-ChildItem -LiteralPath $profilesRoot -Directory -Filter '*.sdProfile') {
+            $path = Join-Path $folder.FullName 'manifest.json'
+            if (!(Test-Path -LiteralPath $path)) { continue }
+            $profile = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+            $changed = $false
+            foreach ($property in @($profile.Actions.PSObject.Properties)) {
+                $action = $property.Value
+                if ($action.UUID -eq 'com.projectdeck.trula.chattest') {
+                    $profile.Actions.PSObject.Properties.Remove($property.Name)
+                    $changed=$true
+                    continue
+                }
+                if ($action.UUID -in @('com.projectdeck.trula.next','com.projectdeck.trula.previous')) {
+                    $selected=if($action.UUID -eq 'com.projectdeck.trula.next'){'nextTrack'}else{'prevTrack'}
+                    if (!$action.Settings) {$action.Settings=[PSCustomObject]@{}}
+                    $action.Settings | Add-Member -MemberType NoteProperty -Name musicCommand -Value $selected -Force
+                    $action.UUID='com.projectdeck.trula.playback'
+                    if($action.Name -in @('Предыдущий трек','Следующий трек')) {$action.Name='Управление музыкой'}
+                    $changed=$true
+                }
+                $definition = $manifest.Actions | Where-Object UUID -eq $action.UUID | Select-Object -First 1
+                if (!$definition) { continue }
+                foreach ($state in $action.States) {
+                    if ($state.Image -eq 'images/trula' -and $definition.Icon -ne 'images/trula') { $state.Image=$definition.Icon; $changed=$true }
+                }
+                if ($action.Name -in @('Подключить Trula','Музыка','Музыка: пуск / пауза','Звук у стримера')) { $action.Name=$definition.Name; $changed=$true }
+            }
+            if ($changed) {
+                New-Item -ItemType Directory -Path "$backup\profiles" -Force | Out-Null
+                Copy-Item -LiteralPath $path -Destination (Join-Path "$backup\profiles" ($folder.Name+'.json'))
+                $profile | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $path -Encoding UTF8
+            }
+        }
+    }
     if ($PanelUrl) {
         $uri = [Uri]$PanelUrl
         Add-Type -AssemblyName System.Web,System.Security
@@ -30,7 +74,7 @@ try {
         $profile = Get-Content -LiteralPath $ProfilePath -Raw -Encoding UTF8 | ConvertFrom-Json
         Copy-Item -LiteralPath $ProfilePath -Destination "$backup\profile.json"
         $manifest = Get-Content "$destination\manifest.json" -Raw -Encoding UTF8 | ConvertFrom-Json
-        foreach ($action in $manifest.Actions | Select-Object -First 3) {
+        foreach ($action in $manifest.Actions) {
             if ($profile.Actions.PSObject.Properties.Value.UUID -contains $action.UUID) { continue }
             $slot = $null
             :findSlot for ($row=0; $row -lt 3; $row++) {

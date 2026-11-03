@@ -4,7 +4,7 @@
   "CodePathWin": "TrulaPlugin.exe",
   "Author": "projectDECK",
   "CategoryIcon": "images/trula",
-  "Version": "0.2.0",
+  "Version": "0.3.0",
   "OS": [
     {
       "MinimumVersion": "10",
@@ -20,16 +20,35 @@
   "Actions": [
     {
       "PropertyInspectorPath": "inspector.html",
-      "UUID": "com.projectdeck.trula.playback",
+      "UUID": "com.projectdeck.trula.connect",
       "UserTitleEnabled": false,
-      "Tooltip": "Остановить или продолжить музыку Trula на всех выходах",
+      "Tooltip": "Подключение Trula и управление аккаунтом Twitch",
       "SupportedInMultiActions": false,
-      "Icon": "images/trula",
-      "Name": "Музыка: пуск / пауза",
+      "Icon": "images/connect-on",
+      "Name": "Аккаунты Trula и Twitch",
       "States": [
         {
           "TitleAlignment": "middle",
-          "Image": "images/trula",
+          "Image": "images/connect-on",
+          "FontSize": "11"
+        }
+      ],
+      "Controllers": [
+        "Keypad"
+      ]
+    },
+    {
+      "PropertyInspectorPath": "inspector.html",
+      "UUID": "com.projectdeck.trula.playback",
+      "UserTitleEnabled": false,
+      "Tooltip": "Пуск / пауза, предыдущий или следующий трек",
+      "SupportedInMultiActions": false,
+      "Icon": "images/music-on",
+      "Name": "Управление музыкой",
+      "States": [
+        {
+          "TitleAlignment": "middle",
+          "Image": "images/music-on",
           "FontSize": "11"
         }
       ],
@@ -43,12 +62,12 @@
       "UserTitleEnabled": false,
       "Tooltip": "Выключить или вернуть музыку в источнике OBS",
       "SupportedInMultiActions": false,
-      "Icon": "images/trula",
-      "Name": "Звук на стриме",
+      "Icon": "images/stream-on",
+      "Name": "Заглушить стрим",
       "States": [
         {
           "TitleAlignment": "middle",
-          "Image": "images/trula",
+          "Image": "images/stream-on",
           "FontSize": "11"
         }
       ],
@@ -60,14 +79,14 @@
       "PropertyInspectorPath": "inspector.html",
       "UUID": "com.projectdeck.trula.monitor",
       "UserTitleEnabled": false,
-      "Tooltip": "Выключить или вернуть музыку в док-панели стримера",
+      "Tooltip": "Выключить или вернуть музыку только у вас",
       "SupportedInMultiActions": false,
-      "Icon": "images/trula",
-      "Name": "Звук у стримера",
+      "Icon": "images/monitor-on",
+      "Name": "Заглушить у себя",
       "States": [
         {
           "TitleAlignment": "middle",
-          "Image": "images/trula",
+          "Image": "images/monitor-on",
           "FontSize": "11"
         }
       ],
@@ -77,16 +96,73 @@
     },
     {
       "PropertyInspectorPath": "inspector.html",
-      "UUID": "com.projectdeck.trula.control",
+      "UUID": "com.projectdeck.trula.chat",
       "UserTitleEnabled": false,
-      "Tooltip": "Громкость, треки и настройки Trula",
+      "Tooltip": "Отправить текущий трек Trula в чат Twitch",
       "SupportedInMultiActions": false,
-      "Icon": "images/trula",
-      "Name": "Дополнительное управление",
+      "Icon": "images/chat-on",
+      "Name": "Трек в чат",
       "States": [
         {
           "TitleAlignment": "middle",
-          "Image": "images/trula",
+          "Image": "images/chat-on",
+          "FontSize": "11"
+        }
+      ],
+      "Controllers": [
+        "Keypad"
+      ]
+    },
+    {
+      "PropertyInspectorPath": "inspector.html",
+      "UUID": "com.projectdeck.trula.streamlevels",
+      "UserTitleEnabled": false,
+      "Tooltip": "Громкость на стриме: два уровня",
+      "SupportedInMultiActions": false,
+      "Icon": "images/stream-volume-on",
+      "Name": "Уровни громкости [стрим]",
+      "States": [
+        {
+          "TitleAlignment": "middle",
+          "Image": "images/stream-volume-on",
+          "FontSize": "11"
+        }
+      ],
+      "Controllers": [
+        "Keypad"
+      ]
+    },
+    {
+      "PropertyInspectorPath": "inspector.html",
+      "UUID": "com.projectdeck.trula.monitorlevels",
+      "UserTitleEnabled": false,
+      "Tooltip": "Громкость у меня: два уровня",
+      "SupportedInMultiActions": false,
+      "Icon": "images/monitor-volume-on",
+      "Name": "Уровни громкости [у меня]",
+      "States": [
+        {
+          "TitleAlignment": "middle",
+          "Image": "images/monitor-volume-on",
+          "FontSize": "11"
+        }
+      ],
+      "Controllers": [
+        "Keypad"
+      ]
+    },
+    {
+      "PropertyInspectorPath": "inspector.html",
+      "UUID": "com.projectdeck.trula.volumestep",
+      "UserTitleEnabled": false,
+      "Tooltip": "Громкость: шаг",
+      "SupportedInMultiActions": false,
+      "Icon": "images/step-volume-on",
+      "Name": "Громче / тише",
+      "States": [
+        {
+          "TitleAlignment": "middle",
+          "Image": "images/step-volume-on",
           "FontSize": "11"
         }
       ],

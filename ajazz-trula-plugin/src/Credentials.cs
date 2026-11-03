@@ -15,4 +15,8 @@ public static class Credentials {
         File.WriteAllBytes(temporary, ProtectedData.Protect(Encoding.UTF8.GetBytes(token), null, DataProtectionScope.CurrentUser));
         if (File.Exists(FilePath)) File.Replace(temporary, FilePath, null); else File.Move(temporary, FilePath);
     }
+    public static void Reset() {
+        if(File.Exists(FilePath)) File.Delete(FilePath);
+        if(File.Exists(FilePath+".tmp")) File.Delete(FilePath+".tmp");
+    }
 }

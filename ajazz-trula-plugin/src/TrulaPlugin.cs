@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -13,13 +13,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 
-// .NET Framework 4.8 with the official Microsoft WebView2 SDK/runtime.
+// .NET Framework 4.8; headless controller of the existing OBS dock.
 public static class Json {
     public static string Encode(object v) { return new JavaScriptSerializer().Serialize(v); }
     public static Dictionary<string, object> Decode(string s) { return new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(s); }
     public static Dictionary<string, object> Map(object v) { return v as Dictionary<string, object> ?? new Dictionary<string, object>(); }
     public static Dictionary<string, object> Child(Dictionary<string, object> v, string k) { object x; return v.TryGetValue(k, out x) ? Map(x) : new Dictionary<string, object>(); }
     public static string Text(Dictionary<string, object> v, string k, string fallback = "") { object x; return v.TryGetValue(k, out x) ? Convert.ToString(x) : fallback; }
+    public static object[] Array(object value) {var list=value as System.Collections.IList;return list==null?new object[0]:list.Cast<object>().ToArray();}
 }
 
 public static class Diagnostics {
@@ -34,9 +35,28 @@ public static class Diagnostics {
 }
 
 public static class Commands {
+    public static string ConnectionMessage(bool configured,bool ready,string detail) {
+        if(!configured) return "Подключите Trula кнопкой «Подключить Trula».";
+        return ready?"Trula подключена к OBS.":"Ссылка сохранена. "+detail;
+    }
     public static Dictionary<string,object> Configure(string action, Dictionary<string,object> settings) {
         var effective = Json.Decode(Json.Encode(settings));
-        if (action == "com.projectdeck.trula.playback") effective["command"] = "togglePlay";
+        if (action == "com.projectdeck.trula.connect") effective["command"] = "connect";
+        if (action == "com.projectdeck.trula.chat") effective["command"] = "sendTrackToChat";
+        if(new[]{"com.projectdeck.trula.streamlevels","com.projectdeck.trula.monitorlevels"}.Contains(action)) {
+            effective["command"]="volumeToggle";effective["media"]="all";
+            effective["output"]=action.EndsWith(".streamlevels")?"source":"panel";
+        }
+        if(action=="com.projectdeck.trula.volumestep") {
+            effective["command"]=Json.Text(settings,"direction","up")=="down"?"volumeDown":"volumeUp";
+            effective["media"]="all";effective["output"]=Json.Text(settings,"volumeOutput","source")=="panel"?"panel":"source";
+        }
+        if (action == "com.projectdeck.trula.playback") {
+            string selected=Json.Text(settings,"musicCommand","togglePlay");
+            effective["command"] = new[]{"togglePlay","nextTrack","prevTrack"}.Contains(selected)?selected:"togglePlay";
+        }
+        if (action == "com.projectdeck.trula.next") effective["command"] = "nextTrack";
+        if (action == "com.projectdeck.trula.previous") effective["command"] = "prevTrack";
         if (action == "com.projectdeck.trula.stream" || action == "com.projectdeck.trula.monitor") {
             effective["command"]="mute"; effective["media"]="all";
             effective["output"] = action.EndsWith(".stream") ? "source" : "panel";
@@ -82,12 +102,21 @@ public static class Commands {
         Json.Child(patch, field[0])[field[1]] = value;
     }
     // Mutates only the candidate restore dictionary. Caller commits it before a mute request.
+    public static int Level(Dictionary<string,object> cfg,string key,int fallback) {
+        int value;if(!int.TryParse(Json.Text(cfg,key,fallback.ToString()),out value) || value<0 || value>100)throw new Exception("Громкость должна быть от 0 до 100%.");return value;
+    }
     public static Dictionary<string, object> Plan(Dictionary<string, object> state, Dictionary<string, object> cfg, Dictionary<string, object> restore) {
         var patch = new Dictionary<string, object>(); var command = Json.Text(cfg, "command", "mute");
         if (Flags.ContainsKey(command)) {
             var f = Flags[command]; object current;
             if (!Json.Child(state, f[0]).TryGetValue(f[1], out current) || !(current is bool)) throw new Exception("Переключатель отсутствует в ответе Trula.");
             Put(patch, f, !(bool)current); return patch;
+        }
+        if(command=="volumeToggle") {
+            int first=Level(cfg,"firstLevel",50),second=Level(cfg,"secondLevel",10);
+            if(first==second)throw new Exception("Задайте два разных уровня громкости.");
+            var selected=VolumeFields(cfg);int target=selected.All(f=>Volume(state,f)==first)?second:first;
+            foreach(var field in selected)Put(patch,field,target);return patch;
         }
         if (!new[]{"mute","volumeUp","volumeDown"}.Contains(command)) throw new Exception("Неизвестная команда.");
         var fields = VolumeFields(cfg); var muted = fields.All(f => Volume(state, f) == 0);
@@ -105,6 +134,11 @@ public static class Commands {
         }
         return patch;
     }
+    public static string StepState(int[] volumes,string command) {
+        if(volumes.All(v=>v==0))return "min";
+        if(volumes.All(v=>v==100))return "max";
+        return command=="volumeDown"?"down":"up";
+    }
     public static string Label(Dictionary<string, object> state, Dictionary<string, object> cfg) {
         string c = Json.Text(cfg,"command","mute");
         if (Flags.ContainsKey(c)) { var f = Flags[c]; object b; if (!Json.Child(state,f[0]).TryGetValue(f[1],out b) || !(b is bool)) throw new Exception("Нет переключателя."); return f[2] + "\n" + ((bool)b ? "ВКЛ" : "ВЫКЛ"); }
@@ -119,20 +153,25 @@ public class TrulaPlugin {
     readonly SemaphoreSlim sendLock = new SemaphoreSlim(1), gate = new SemaphoreSlim(1);
     readonly Dictionary<string, Dictionary<string, object>> keys = new Dictionary<string, Dictionary<string, object>>();
     readonly Dictionary<string, string> actionIds = new Dictionary<string, string>();
+    readonly Dictionary<string, string> artwork = new Dictionary<string, string>();
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string,bool> pending = new System.Collections.Concurrent.ConcurrentDictionary<string,bool>();
     Dictionary<string, object> global = new Dictionary<string, object>();
     readonly Dictionary<string, DateTime> lastClick = new Dictionary<string, DateTime>();
     bool globalsLoaded;
+    string obsStatus="Связь с OBS ещё не проверена.";
+    bool obsReady;
+    readonly HashSet<string> uiRequests = new HashSet<string>();
     string uuid;
-    WebViewBridge bridge;
+    ObsBridge bridge;
+    async Task<Dictionary<string,object>> ReadObs(string token) {
+        try {var state=await bridge.Read(token);obsReady=true;obsStatus="Trula подключена к OBS.";return state;}
+        catch(Exception ex) {obsReady=false;obsStatus=ex.Message;throw;}
+    }
     [STAThread]
     static void Main(string[] args) {
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-        System.Windows.Forms.Application.EnableVisualStyles();
-        var plugin=new TrulaPlugin(); plugin.bridge=new WebViewBridge();
-        var handle=plugin.bridge.Handle;
-        var execution=plugin.Run(args);
-        execution.ContinueWith(t=> { var ignored=t.Exception; if(plugin.bridge.IsHandleCreated) plugin.bridge.BeginInvoke((System.Action)(()=>System.Windows.Forms.Application.Exit())); });
-        System.Windows.Forms.Application.Run(plugin.bridge);
+        var plugin=new TrulaPlugin(); plugin.bridge=new ObsBridge();
+        try { plugin.Run(args).GetAwaiter().GetResult(); } catch { Diagnostics.Write("connection closed"); }
     }
     async Task Send(string ev, string context, object payload) {
         var m = new Dictionary<string,object>{{"event",ev},{"context",context},{"payload",payload}};
@@ -147,20 +186,46 @@ public class TrulaPlugin {
         await Send("setTitle", context, new {title, target=0});
         if (error) await Send("showAlert",context,new {});
     }
-    async Task Status(string context, string message) { await Send("sendToPropertyInspector",context,new {message}); }
+    async Task Status(string context, string message) { await Send("sendToPropertyInspector",context,new {message,connected=!string.IsNullOrEmpty(Credentials.Read()),trulaReady=obsReady,twitchAccount=TwitchChat.AccountLabel(),twitchConnected=TwitchChat.IsConnected()}); }
+    async Task Artwork(string context,Dictionary<string,object> cfg,Dictionary<string,object> state,bool error=false) {
+        string command=Json.Text(cfg,"command"), output=Json.Text(cfg,"output");
+        string kind=command=="sendTrackToChat"?"chat":command=="nextTrack"?"next":command=="prevTrack"?"previous":command=="togglePlay"?"music":command=="mute" && output=="source"?"stream":command=="mute" && output=="panel"?"monitor":"control";
+        bool active=!error; string caption="ГОТОВО";
+        if(new[]{"volumeToggle","volumeUp","volumeDown"}.Contains(command)) kind=output=="panel"?"monitor-volume":"stream-volume";
+        if(error) caption="НЕТ СВЯЗИ";
+        else if(kind=="music") {active=Json.Text(state,"playing")=="True";caption=active?"ИГРАЕТ":"ПАУЗА";}
+        else if(new[]{"stream","monitor","stream-volume","monitor-volume"}.Contains(kind)) {
+            var volumes=Commands.VolumeFields(cfg).Select(f=>Convert.ToInt32(Json.Child(state,f[0])[f[1]])).ToArray();
+            active=volumes.Any(v=>v>0);caption=!active?"БЕЗ ЗВУКА":volumes.Min()==volumes.Max()?volumes[0]+"%":volumes.Min()+"–"+volumes.Max()+"%";
+            if(command=="volumeToggle") caption=volumes.All(v=>v==Commands.Level(cfg,"firstLevel",50))?"first":"alternate";
+            if(command=="volumeUp" || command=="volumeDown") { kind=output=="panel"?"monitor-step":"stream-step"; caption=Commands.StepState(volumes,command); active=true; }
+        }
+        string signature=kind+"|"+active+"|"+error+"|"+caption;
+        string prior; if(artwork.TryGetValue(context,out prior) && prior==signature) return;
+        await Send("setImage",context,new {image=KeyArtwork.Data(kind,active,caption,error),target=0});
+        await Title(context,"");
+        artwork[context]=signature;
+    }
     async Task Refresh(string context, Dictionary<string,object> cfg, bool execute) {
+        if(Json.Text(cfg,"command")=="connect") {
+            if(execute) ConnectionWindow.Open();
+            bool configured=!string.IsNullOrEmpty(Credentials.Read());
+            await Send("setImage",context,new {image=KeyArtwork.Data("connect",configured,"",configured && !obsReady),target=0});
+            await Title(context,"");await Status(context,Commands.ConnectionMessage(configured,obsReady,obsStatus));return;
+        }
         string failure = null;
         try {
-            string token = Commands.Token(Json.Text(cfg,"token", Credentials.Read())); bridge.Allow(token);
-            var state = bridge.Read(token);
+            if(string.IsNullOrWhiteSpace(Json.Text(cfg,"token",Credentials.Read()))) throw new Exception("Сначала подключите Trula кнопкой «Подключить Trula».");
+            string token = Commands.Token(Json.Text(cfg,"token", Credentials.Read()));
+            var state = await ReadObs(token);
             if (execute) {
                 Diagnostics.Write("execute "+Json.Text(cfg,"command")+" output="+Json.Text(cfg,"output"));
                 if (!globalsLoaded) throw new Exception("Загрузка настроек. Повторите нажатие.");
                 string command = Json.Text(cfg,"command","mute");
-                if (new[]{"togglePlay","nextTrack","prevTrack"}.Contains(command)) {
+                if(command=="sendTrackToChat") {await TwitchChat.Send(state,cfg);}
+                else if (new[]{"togglePlay","nextTrack","prevTrack"}.Contains(command)) {
                     if (command=="togglePlay" && Json.Text(state,"hasTrack")=="False") throw new Exception("Очередь Trula пуста. Добавьте трек в панели.");
-                    await bridge.Call(token,new {command});
-                    state = bridge.Read(token);
+                    state = await bridge.Call(token,new {command});
                 } else {
                 string hash = Commands.Hash(token);
                 var restores = Json.Child(global,"restore");
@@ -170,33 +235,59 @@ public class TrulaPlugin {
                 // Save restoration data before silencing audio, including across app restarts.
                 restores[hash] = candidate; global["restore"] = restores;
                 await Send("setGlobalSettings",uuid,global);
-                await bridge.Call(token,new {command="patch", patch});
-                state = bridge.Read(token);
+                state = await bridge.Call(token,new {command="patch", patch});
                 // Do not claim success when an API ignores a field.
                 foreach (var section in patch) foreach (var field in Json.Map(section.Value)) {
                     object actual;
                     if (!Json.Child(state,section.Key).TryGetValue(field.Key,out actual) || !Equals(actual,field.Value)) throw new Exception("Trula не подтвердила изменение.");
                 }
                 }
-                await Send("showOk",context,new {});
                 Diagnostics.Write("confirmed");
             }
-            string cmd = Json.Text(cfg,"command","mute");
-            string label = cmd=="togglePlay" ? "МУЗЫКА\n" + (Json.Text(state,"playing")=="True" ? "ИГРАЕТ" : "ПАУЗА") : cmd=="nextTrack" ? "СЛЕД.\nТРЕК" : cmd=="prevTrack" ? "ПРЕД.\nТРЕК" : Commands.Label(state,cfg);
-            await Title(context,label); await Status(context,"Панель подключена. " + (execute ? "Команда выполнена." : "Настройки прочитаны."));
+            await Artwork(context,cfg,state); await Status(context,execute && Json.Text(cfg,"command")=="sendTrackToChat"?"Трек отправлен в чат Twitch.":execute?"Готово — состояние обновлено в OBS.":"Подключено к Trula в OBS.");
         } catch (Exception ex) {
-            string message = ex is TaskCanceledException ? "Trula не ответила вовремя." : ex is HttpRequestException ? "Нет соединения с Trula." : ex.Message;
+            bool chat=Json.Text(cfg,"command")=="sendTrackToChat";
+            string message = ex is TaskCanceledException ? chat?"Twitch не подтвердил отправку. Проверьте чат перед повторным нажатием.":"Trula не ответила вовремя." : ex is HttpRequestException ? chat?"Нет соединения с Twitch.":"Нет соединения с Trula." : ex.Message;
             // Never show arbitrary HTTP content or credentials.
             if (ex is System.Web.HttpException || ex is ArgumentException || ex is InvalidOperationException) message = "Не удалось прочитать ответ Trula.";
             failure = message;
         }
-        if (failure != null) { await Title(context,"TRULA\nОШИБКА",execute); await Status(context,failure); }
+        if (failure != null) { await Artwork(context,cfg,null,true); await Status(context,failure); }
         if (failure != null && execute) Diagnostics.Write("failed "+failure);
     }
     async Task Event(Dictionary<string,object> m) {
         string ev = Json.Text(m,"event"), ctx = Json.Text(m,"context"); var payload = Json.Child(m,"payload");
         string actionId = Json.Text(m,"action");
         if (!string.IsNullOrEmpty(actionId)) actionIds[ctx] = actionId;
+        if(ev=="didReceiveSettings") {
+            var received=Json.Child(payload,"settings");var request=Json.Child(received,"uiRequest");
+            if(request.Count>0) {
+                received.Remove("uiRequest");await Send("setSettings",ctx,received);
+                string id=Json.Text(request,"id"),command=Json.Text(request,"command");
+                double created;double now=(DateTime.UtcNow-new DateTime(1970,1,1)).TotalMilliseconds;
+                bool fresh;lock(uiRequests) {fresh=uiRequests.Add(id);if(uiRequests.Count>100) {uiRequests.Clear();uiRequests.Add(id);}}
+                if(double.TryParse(Json.Text(request,"created"),out created) && Math.Abs(now-created)<30000 && fresh) {
+                    if(command=="openConnection") {ConnectionWindow.Open();await Status(ctx,"Окно подключения открыто.");}
+                    else if(command=="openTwitch") {TwitchWindow.Open();await Status(ctx,"Подтвердите подключение Twitch в браузере.");}
+                    else if(command=="disconnectTwitch") {await TwitchChat.Disconnect();await Status(ctx,"Twitch отключён.");}
+                    else if(command=="resetConnection") {
+                        Credentials.Reset();artwork.Clear();
+                        foreach(var key in keys.ToArray()) {
+                            if(key.Value.Remove("token")) await Send("setSettings",key.Key,key.Value);
+                            await Refresh(key.Key,key.Value,false);
+                        }
+                        await Status(ctx,"Подключение сброшено. Можно подключить Trula заново.");
+                    }
+                    else if(command=="startObs") {string note="OBS запускается.";try {bridge.StartObs();}catch(Exception ex){note=ex.Message;}await Status(ctx,note);}
+                    Diagnostics.Write("inspector "+command);
+                }
+            }
+        }
+        if(ev=="sendToPlugin" && payload.ContainsKey("openConnection")) {ConnectionWindow.Open();return;}
+        if(ev=="propertyInspectorDidAppear") {
+            if(keys.ContainsKey(ctx)) await Refresh(ctx,keys[ctx],false);
+            return;
+        }
         if (ev == "sendToPlugin" && payload.ContainsKey("saveConnection")) {
             bool saved = false;
             try { Credentials.Save(Json.Text(payload,"connection")); saved = true; } catch { }
@@ -205,15 +296,19 @@ public class TrulaPlugin {
         }
         if (ev == "sendToPlugin" && payload.ContainsKey("getConnection")) {
             string token = Credentials.Read();
-            if (!string.IsNullOrEmpty(token)) bridge.Allow(token);
-            await Send("sendToPropertyInspector",ctx,new {message=string.IsNullOrEmpty(token)?"Вставьте ссылку панели Trula один раз.":"Подключение сохранено. Плеер работает в отдельном окне Trula."});
+            await Status(ctx,string.IsNullOrEmpty(token)?"Сначала подключите Trula кнопкой «Подключить Trula».":"Подключение Trula сохранено.");
+            if(!string.IsNullOrEmpty(token) || actionId=="com.projectdeck.trula.connect") await Refresh(ctx,Commands.Configure(actionId,Json.Child(payload,"settings")),false);
             return;
         }
-        if (ev=="sendToPlugin" && payload.ContainsKey("showPlayer")) { bridge.OpenPlayer(); return; }
+        if (ev=="sendToPlugin" && payload.ContainsKey("startObs")) {
+            string message="OBS запущен. Дождитесь загрузки док-панели Trula.";
+            try { bridge.StartObs(); } catch(Exception ex) { message=ex.Message; }
+            await Status(ctx,message); return;
+        }
         var effective = Commands.Configure(actionId,Json.Child(payload,"settings"));
         if (payload.ContainsKey("settings")) payload["settings"] = effective;
         if (ev == "didReceiveGlobalSettings") { global = Json.Child(payload,"settings"); globalsLoaded = true; return; }
-        if (ev == "willDisappear") { keys.Remove(ctx); actionIds.Remove(ctx); lastClick.Remove(ctx); return; }
+        if (ev == "willDisappear") { keys.Remove(ctx); actionIds.Remove(ctx); lastClick.Remove(ctx); artwork.Remove(ctx); return; }
         if (ev == "willAppear" || ev == "didReceiveSettings") { keys[ctx] = Json.Child(payload,"settings"); await Refresh(ctx,keys[ctx],false); }
         if (ev == "sendToPlugin" && payload.ContainsKey("check")) { keys[ctx] = Json.Child(payload,"settings"); await Refresh(ctx,keys[ctx],false); }
         if (ev == "keyUp" || (ev=="sendToPlugin" && payload.ContainsKey("execute"))) {
@@ -224,9 +319,15 @@ public class TrulaPlugin {
     }
     async Task Poll() {
         while (socket.State == WebSocketState.Open) {
-            await Task.Delay(7000); await gate.WaitAsync();
+            await Task.Delay(2000); if(!await gate.WaitAsync(0)) continue;
             try {
-                foreach (var k in keys.ToArray()) if (!string.IsNullOrWhiteSpace(Json.Text(k.Value,"token", Credentials.Read()))) await Refresh(k.Key,k.Value,false);
+                foreach(var key in keys.ToArray().Where(k=>(Json.Text(k.Value,"command")=="connect"))) await Refresh(key.Key,key.Value,false);
+                foreach(var group in keys.ToArray().Where(k=>!(Json.Text(k.Value,"command")=="connect")).GroupBy(k=>Json.Text(k.Value,"token",Credentials.Read()))) {
+                    if(string.IsNullOrWhiteSpace(group.Key)) continue;
+                    Dictionary<string,object> state=null;
+                    try {state=await ReadObs(Commands.Token(group.Key));} catch { }
+                    foreach(var k in group) {await Artwork(k.Key,k.Value,state,state==null);await Status(k.Key,obsStatus);}
+                }
             } finally { gate.Release(); }
         }
     }
@@ -234,7 +335,6 @@ public class TrulaPlugin {
         var opts = new Dictionary<string,string>(); for (int i=0;i+1<args.Length;i+=2) opts[args[i].TrimStart('-')] = args[i+1];
         int port; if (!opts.ContainsKey("port") || !int.TryParse(opts["port"],out port) || port<1 || port>65535) return;
         uuid = opts["pluginUUID"];
-            bridge.Start();
         await socket.ConnectAsync(new Uri("ws://127.0.0.1:"+port),CancellationToken.None);
         await Raw(new { @event=opts["registerEvent"], uuid });
         await Send("getGlobalSettings",uuid,new {});
@@ -245,9 +345,33 @@ public class TrulaPlugin {
                 WebSocketReceiveResult r;
                 do { r = await socket.ReceiveAsync(new ArraySegment<byte>(buffer),CancellationToken.None); if(r.MessageType==WebSocketMessageType.Close) return; ms.Write(buffer,0,r.Count); if(ms.Length>1024*1024) return; } while(!r.EndOfMessage);
                 var m = Json.Decode(Encoding.UTF8.GetString(ms.ToArray()));
-                await gate.WaitAsync(); try { await Event(m); } finally { gate.Release(); }
+                var ignored = Dispatch(m);
             }
         }
         await poll;
+    }
+    async Task Dispatch(Dictionary<string,object> message) {
+        string ev=Json.Text(message,"event"),context=Json.Text(message,"context");
+        // Opening account UI must never wait behind failed OBS requests.
+        var received=Json.Child(Json.Child(message,"payload"),"settings");
+        var ui=Json.Child(received,"uiRequest");
+        if(ev=="didReceiveSettings" && new[]{"openConnection","openTwitch"}.Contains(Json.Text(ui,"command"))) {
+            string id=Json.Text(ui,"id");bool fresh;lock(uiRequests) {fresh=uiRequests.Add(id);}
+            received.Remove("uiRequest");
+            try {
+                await Send("setSettings",context,received);
+                double created,now=(DateTime.UtcNow-new DateTime(1970,1,1)).TotalMilliseconds;
+                if(fresh && double.TryParse(Json.Text(ui,"created"),out created) && Math.Abs(now-created)<30000) {
+                    if(Json.Text(ui,"command")=="openTwitch") TwitchWindow.Open();else ConnectionWindow.Open();
+                    await Status(context,"Окно подключения открыто.");Diagnostics.Write("account window requested");
+                }
+            }catch {Diagnostics.Write("account UI failed");}
+            return;
+        }
+        bool click=ev=="keyUp" || (ev=="sendToPlugin" && Json.Child(message,"payload").ContainsKey("execute"));
+        if(click && !pending.TryAdd(context,true)) return;
+        try { await gate.WaitAsync(); try {await Event(message);} finally {gate.Release();} }
+        catch {Diagnostics.Write("event failed");}
+        finally {bool removed;if(click)pending.TryRemove(context,out removed);}
     }
 }

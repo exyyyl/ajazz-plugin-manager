@@ -98,10 +98,8 @@ internal static class Program
             "Install-Plugin.ps1",
             Path.Combine("dist", "com.projectdeck.trula.sdPlugin", "manifest.json"),
             Path.Combine("dist", "com.projectdeck.trula.sdPlugin", "TrulaPlugin.exe"),
-            Path.Combine("dist", "com.projectdeck.trula.sdPlugin", "bridge.js"),
-            Path.Combine("dist", "com.projectdeck.trula.sdPlugin", "Microsoft.Web.WebView2.Core.dll"),
-            Path.Combine("dist", "com.projectdeck.trula.sdPlugin", "Microsoft.Web.WebView2.WinForms.dll"),
-            Path.Combine("dist", "com.projectdeck.trula.sdPlugin", "WebView2Loader.dll")
+            Path.Combine("dist", "com.projectdeck.trula.sdPlugin", "obs-player.js"),
+            Path.Combine("dist", "com.projectdeck.trula.sdPlugin", "twitch-config.json")
         };
 
         foreach (string relativePath in requiredFiles)

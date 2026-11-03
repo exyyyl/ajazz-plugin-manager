@@ -1,12 +1,51 @@
 <!doctype html>
 <html lang="ru"><meta charset="utf-8"><title>Trula</title>
-<style>body{background:#2d2d2d;color:#eee;font:13px 'Segoe UI',sans-serif;padding:12px}label{display:block;margin:12px 0 5px}input,select{box-sizing:border-box;width:100%;padding:7px;background:#424242;color:white;border:1px solid #666;border-radius:4px}p{color:#bbb;line-height:1.5}#status{color:#8bd2ff}button{margin-top:12px;padding:8px;background:#176ca0;color:white;border:0;border-radius:4px}</style>
-<label for="token">Ссылка панели или token</label><input id="token" type="password" autocomplete="off" placeholder="Вставьте ссылку Trula">
-<div id="advanced"><label for="command">Команда</label><select id="command">
-<option value="mute">Звук: выключить / вернуть</option><option value="volumeUp">Громче</option><option value="volumeDown">Тише</option>
-<option value="togglePlay">Воспроизведение / пауза</option><option value="nextTrack">Следующий трек</option><option value="prevTrack">Предыдущий трек</option>
-<option value="autostart">Автозапуск заказов</option><option value="autoplay">Автопереход к следующему треку</option><option value="redemptions">Заказы за баллы</option><option value="playlist">Фоновый плейлист</option><option value="shuffle">Перемешивание плейлиста</option><option value="playlistVisible">Плейлист: показывать в источнике</option><option value="titleVisible">Название: показывать в источнике</option></select>
-<div id="audio"><label for="output">Где менять звук</label><select id="output"><option value="all">Панель и источник OBS</option><option value="panel">Панель</option><option value="source">Источник OBS</option></select>
-<label for="media">Какая музыка</label><select id="media"><option value="all">Заказы и плейлисты</option><option value="orders">Заказы</option><option value="playlist">Плейлисты</option></select>
-<label for="step">Шаг громкости, %</label><input id="step" type="number" min="1" max="100" value="5"></div></div>
-<button id="save">Сохранить и проверить</button><p id="status">Подключение общее для всех кнопок. Ссылка хранится в зашифрованном файле текущего пользователя Windows.</p><button id="execute">Выполнить действие</button><button id="player">Открыть плеер</button><p>Плеер откроется в отдельном окне с настоящей панелью Trula. Закрытие окна скрывает его: музыка продолжает работать. Отдельная док-панель Trula в OBS не нужна.</p><p>Для раздельного звука выберите в Trula вывод «Везде». В сцену OBS добавьте отдельный источник Trula; звук встроенного плеера не дублируйте захватом рабочего стола.</p><script src="inspector.js"></script></html>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:12px;color:#e5e5e5;background:#2d2d2d;font:12px 'Segoe UI',sans-serif;color-scheme:dark}
+[hidden]{display:none!important}
+#status{margin:0 0 12px;color:#8ddbc5;line-height:1.45}
+button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:34px;padding:7px 13px;border:1px solid #a46cde;border-radius:7px;background:#8942d2;color:#fff;font:600 12px 'Segoe UI',sans-serif;line-height:18px;cursor:pointer;box-shadow:0 1px 2px #0003,inset 0 1px 0 #ffffff12;transition:background .12s,border-color .12s,box-shadow .12s}
+button:hover{background:#9851e0;border-color:#bb8beb}
+button:active{background:#7534bc;box-shadow:inset 0 1px 3px #0003}
+button:focus-visible{outline:2px solid #c9a3f3;outline-offset:3px}
+button:disabled{opacity:.5;cursor:default;box-shadow:none}
+button::before{content:'';width:14px;height:14px;flex:0 0 14px;background:currentColor;mask:var(--icon) center/contain no-repeat;-webkit-mask:var(--icon) center/contain no-repeat}
+#connect,#twitch-connect{--icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cg fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m10 13 4-4m-6 7-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 1 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0'/%3E%3C/g%3E%3C/svg%3E")}
+#obs{background:#39383e;border-color:#605c69;color:#eee;--icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m8 5 11 7-11 7Z' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E")}
+#obs:hover{background:#45414d;border-color:#93839f}
+#obs:active{background:#302d35}
+#reset,#twitch-disconnect{background:transparent;border-color:#754851;color:#eeabb5;box-shadow:none;--icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 10a8 8 0 1 1 1 7M4 4v6h6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+#reset:hover,#twitch-disconnect:hover{background:#472e35;border-color:#b76e7c;color:#ffd0d7}
+#reset:active,#twitch-disconnect:active{background:#38242a}
+.field-row{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;align-items:center;margin:12px 0}
+.field-row label{color:#ddd;white-space:nowrap}
+select{display:block;width:100%;min-width:0;height:30px;padding:3px 8px;background:#444;color:#fff;border:1px solid #727272;border-radius:2px;font:inherit;cursor:pointer}
+select:hover{border-color:#999;background:#494949}
+select:focus-visible{outline:2px solid #a27ae7;outline-offset:1px}
+option{background:#444;color:#fff}
+.chat-account-status{margin:0 0 14px;padding:0 11px;border:1px solid #51465e;border-radius:8px;background:#343039;font-size:11px;line-height:1.4}
+.chat-service-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:36px;padding:7px 0}
+.chat-service-row+.chat-service-row{border-top:1px solid #4b414f}
+.chat-service-name{font-weight:600;font-size:12px;color:#eee5f6;flex:0 0 auto}
+.chat-service-value{display:inline-block;padding:3px 8px;border:1px solid #64556d;border-radius:5px;color:#d0c3d8;background:#403646;font-size:10px;text-align:right;overflow-wrap:anywhere}
+.chat-service-value.connected{color:#b3e4cf;background:#2d4438;border-color:#466652}
+.chat-service-value.disconnected{color:#efb5be;background:#49323a;border-color:#79535e}
+#connection{display:block}
+.accounts-panel{background:#343039;border:1px solid #51465e;border-radius:9px;padding:0 11px}
+.service-row{padding:10px 0}
+.service-row+.service-row{border-top:1px solid #4b414f}
+.service-heading{display:flex;align-items:center;gap:8px;min-height:20px;margin-bottom:9px;color:#d9c2f0}
+.service-status{font-size:12px;color:#b3e4cf;line-height:1.4;overflow-wrap:anywhere}
+.service-status.disconnected{color:#d0b8cf}
+.service-actions{display:flex;flex-wrap:wrap;gap:6px}
+.service-actions button{margin:0!important;min-height:29px;padding:4px 9px;font-size:11px;border-radius:5px}
+#status{padding:8px 10px;border:1px solid #425d51;background:#2e3b34;border-radius:6px;font-size:11px;line-height:1.4}
+#status.disconnected{color:#efb5be;border-color:#725059;background:#3b3035}
+#chat-feedback{display:block;border-top:1px solid #4b414f;margin:0;padding:9px 0;width:100%;color:#ded1e8}
+input[type="number"]{width:100%;min-width:0;height:30px;padding:3px 8px;background:#444;color:#fff;border:1px solid #727272;border-radius:2px;font:inherit}input[type="number"]:focus-visible{outline:2px solid #a27ae7;outline-offset:1px}
+.action-description{margin:14px 0 0;padding:10px 12px;border:1px solid #504957;border-radius:7px;background:#333036;color:#cfc6d7;line-height:1.5}.action-description strong{display:block;margin-bottom:4px;color:#eee5f6;font-size:11px}.action-description p{margin:0}
+</style>
+<p id="status" role="status">Проверка подключения…</p>
+<div id="connection" hidden><div class="accounts-panel"><section class="service-row"><div class="service-heading"><img src="images/trula@2x.png" width="20" height="20" alt=""><span id="trula-badge" class="service-status">Проверка Trula…</span></div><div class="service-actions"><button id="connect">Подключить Trula</button><button id="obs">Запустить OBS</button><button id="reset" hidden>Отключить</button></div></section><section class="service-row"><div class="service-heading"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg><strong id="twitch-name" hidden>Аккаунт Twitch</strong><span id="twitch-badge" class="service-status">Проверка Twitch…</span></div><div class="service-actions"><button id="twitch-connect">Подключить Twitch</button><button id="twitch-disconnect" hidden>Отключить</button></div></section></div></div>
+<div id="chat-settings" hidden><div id="chat-account-status" class="chat-account-status" role="status"><div class="chat-service-row"><span class="chat-service-name">Trula</span><span id="chat-trula-status" class="chat-service-value">Проверка…</span></div><div class="chat-service-row"><span class="chat-service-name">Twitch</span><span id="chat-twitch-status" class="chat-service-value">Проверка…</span></div><span id="chat-feedback" hidden></span></div><div class="field-row"><label for="message-format">Сообщение:</label><select id="message-format"><option value="both">Название и ссылка</option><option value="title">Только название</option><option value="link">Только ссылка</option></select></div></div><div id="music-settings" class="field-row" hidden><label for="music-command">Операция:</label><select id="music-command"><option value="prevTrack">Предыдущий трек</option><option value="togglePlay" selected>Пуск / пауза</option><option value="nextTrack">Следующий трек</option></select></div><div id="levels-settings" hidden><div class="field-row"><label for="first-level">Уровень 1, %:</label><input id="first-level" type="number" min="0" max="100" value="50"></div><div class="field-row"><label for="second-level">Уровень 2, %:</label><input id="second-level" type="number" min="0" max="100" value="10"></div></div><div id="step-settings" hidden><div class="field-row"><label for="volume-output">Выход:</label><select id="volume-output"><option value="source">На стриме</option><option value="panel">У меня</option></select></div><div class="field-row"><label for="volume-direction">Действие:</label><select id="volume-direction"><option value="up">Увеличить</option><option value="down">Уменьшить</option></select></div><div class="field-row"><label for="volume-step">Шаг, %:</label><input id="volume-step" type="number" min="1" max="100" value="5"></div></div><aside id="action-description" class="action-description" hidden><strong>Как работает</strong><p id="action-description-text"></p></aside><script src="inspector.js"></script></html>
