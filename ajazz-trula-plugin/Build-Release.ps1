@@ -4,7 +4,7 @@ $stage = Join-Path $PSScriptRoot ('build\release-' + [Guid]::NewGuid().ToString(
 $target = Join-Path $stage 'dist\com.projectdeck.trula.sdPlugin'
 $release = Join-Path $PSScriptRoot 'release'
 New-Item -ItemType Directory -Path $target,$release -Force | Out-Null
-foreach ($name in @('TrulaPlugin.exe','manifest.json','obs-player.js','twitch-config.json','inspector.js','inspector.html','images')) {
+foreach ($name in @('TrulaPlugin.exe','TrulaObsGuard.exe','manifest.json','obs-player.js','twitch-config.json','inspector.js','inspector.html','images')) {
     Copy-Item -LiteralPath "$PSScriptRoot\dist\com.projectdeck.trula.sdPlugin\$name" -Destination $target -Recurse
 }
 $utf8Bom = New-Object Text.UTF8Encoding($true)

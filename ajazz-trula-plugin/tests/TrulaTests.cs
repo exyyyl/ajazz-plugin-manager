@@ -18,6 +18,15 @@ public class TrulaTests {
     static void Equal(object a, object b) { if(!Equals(a,b)) throw new Exception("Expected "+b+", got "+a); count++; }
     static void Reject(Action action) { try { action(); } catch { count++; return; } throw new Exception("Expected rejection"); }
     public static int Main() {
+        ObsGuard.CheckAbi();
+        Equal(ObsLaunch.Arguments(""),"--remote-debugging-port=17936 --remote-debugging-address=127.0.0.1");
+        Equal(ObsLaunch.Arguments("--profile \"Streaming\" --collection \"Live Scene\""),"\"--profile\" \"Streaming\" \"--collection\" \"Live Scene\" --remote-debugging-port=17936 --remote-debugging-address=127.0.0.1");
+        Equal(ObsLaunch.Decode(ObsLaunch.Encode("--profile \"Тест\"")),"--profile \"Тест\"");
+        Reject(()=>ObsLaunch.Arguments("\"--remote-debugging-port=9222\""));
+        Reject(()=>ObsLaunch.Arguments("--REMOTE-DEBUGGING-ADDRESS 0.0.0.0"));
+        Reject(()=>ObsLaunch.Arguments("--remote-debugging-pipe"));
+        Reject(()=>ObsLaunch.Arguments("--profile test\0--remote-debugging-port=9222"));
+        Reject(()=>ObsLaunch.Decode("%invalid"));
         var state=Json.Decode("{\"panel\":{\"orderVolume\":30,\"playlistVolume\":0,\"eventVolume\":75,\"isAutoplay\":true},\"source\":{\"orderVolume\":70,\"playlistVolume\":20,\"isTitleVisible\":false}}");
         var cfg=Json.Decode("{\"command\":\"mute\",\"output\":\"all\",\"media\":\"all\"}"); var restore=new Dictionary<string,object>();
         var p=Commands.Plan(state,cfg,restore);

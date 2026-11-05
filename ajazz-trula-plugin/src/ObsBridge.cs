@@ -11,7 +11,7 @@ using System.Runtime.InteropServices;
 
 // No browser is created here. The existing OBS dock is the only player.
 public sealed class ObsBridge {
-    public const int Port = 17936;
+    public const int Port = ObsGuard.Port;
     readonly HttpClient local = new HttpClient(new HttpClientHandler {UseProxy=false,AllowAutoRedirect=false}) {Timeout=TimeSpan.FromSeconds(3)};
     readonly string script = File.ReadAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"obs-player.js"));
     delegate bool WindowVisitor(IntPtr window,IntPtr data);
@@ -34,7 +34,9 @@ public sealed class ObsBridge {
         if(found==IntPtr.Zero)return false;
         ShowWindowAsync(found,9);ShowWindowAsync(found,5);SetForegroundWindow(found);return true;
     }
-    public async Task<string> StartObs() {
+    public async Task<string> StartObs(string startupArguments="") {
+        ObsGuard.Require();
+        string launchArguments=ObsLaunch.Arguments(startupArguments);
         var processes=Process.GetProcessesByName("obs64");
         if (processes.Length>0) {
             bool shown=false;foreach(var process in processes)using(process) {try {shown=ShowObs(process)||shown;}catch {}}
@@ -44,10 +46,11 @@ public sealed class ObsBridge {
         }
         string exe=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),"obs-studio","bin","64bit","obs64.exe");
         if(!File.Exists(exe)) throw new Exception("OBS не найден в стандартной папке установки.");
-        Process.Start(new ProcessStartInfo(exe,"--remote-debugging-port="+Port+" --remote-debugging-address=127.0.0.1") {WorkingDirectory=Path.GetDirectoryName(exe),UseShellExecute=true,WindowStyle=ProcessWindowStyle.Normal});
+        Process.Start(new ProcessStartInfo(exe,launchArguments) {WorkingDirectory=Path.GetDirectoryName(exe),UseShellExecute=true,WindowStyle=ProcessWindowStyle.Normal});
         return "OBS запускается. Дождитесь загрузки панели Trula.";
     }
     async Task<Dictionary<string,object>> Player(string token,string command,object patch=null) {
+        ObsGuard.Require();
         string listing;
         try { listing=await local.GetStringAsync("http://127.0.0.1:"+Port+"/json/list"); }
         catch { throw new Exception("Нет подключения к OBS. Закройте OBS и запустите кнопкой «Запустить OBS» в настройках Trula."); }

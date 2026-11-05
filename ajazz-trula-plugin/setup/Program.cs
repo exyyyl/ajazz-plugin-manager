@@ -96,8 +96,10 @@ internal static class Program
     {
         string[] requiredFiles = {
             "Install-Plugin.ps1",
+            "Configure-Obs.ps1",
             Path.Combine("dist", "com.projectdeck.trula.sdPlugin", "manifest.json"),
             Path.Combine("dist", "com.projectdeck.trula.sdPlugin", "TrulaPlugin.exe"),
+            Path.Combine("dist", "com.projectdeck.trula.sdPlugin", "TrulaObsGuard.exe"),
             Path.Combine("dist", "com.projectdeck.trula.sdPlugin", "obs-player.js"),
             Path.Combine("dist", "com.projectdeck.trula.sdPlugin", "twitch-config.json")
         };

@@ -7,6 +7,8 @@ $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $sources = Get-ChildItem (Join-Path $root 'src') -Filter '*.cs' | Select-Object -ExpandProperty FullName
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ /r:System.Net.Http.dll /r:System.Web.Extensions.dll /r:System.Drawing.dll /r:System.Security.dll /r:System.Windows.Forms.dll "/out:$dest\TrulaPlugin.exe" $sources
 if ($LASTEXITCODE -ne 0) { throw 'Compilation failed' }
+& $compiler /nologo /target:winexe /platform:x64 /optimize+ /r:System.Security.dll /r:System.Windows.Forms.dll "/out:$dest\TrulaObsGuard.exe" (Join-Path $root 'src\ObsGuard.cs') (Join-Path $root 'guard\Program.cs')
+if ($LASTEXITCODE -ne 0) { throw 'OBS guard compilation failed' }
 & $compiler /nologo /target:exe /main:TrulaTests /platform:x64 /r:System.Net.Http.dll /r:System.Web.Extensions.dll /r:System.Drawing.dll /r:System.Security.dll /r:System.Windows.Forms.dll "/out:$dest\TrulaTests.exe" $sources (Join-Path $root 'tests\TrulaTests.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Test compilation failed' }
 & (Join-Path $dest 'TrulaTests.exe')

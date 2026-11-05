@@ -206,6 +206,17 @@ public class TrulaPlugin {
     [STAThread]
     static void Main(string[] args) {
         ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+        if((args.Length==1 || args.Length==2) && args[0]=="--launch-obs") {
+            try {new ObsBridge().StartObs(args.Length==2?ObsLaunch.Decode(args[1]):"").GetAwaiter().GetResult();}
+            catch(Exception error){System.Windows.Forms.MessageBox.Show(error.Message,"OBS — Trula",System.Windows.Forms.MessageBoxButtons.OK,System.Windows.Forms.MessageBoxIcon.Warning);}
+            return;
+        }
+        if(args.Length==1 && args[0]=="--check-obs") {
+            // Read-only diagnostic: return an exit code, never a page URL/token.
+            try {var token=Credentials.Read();if(String.IsNullOrEmpty(token))Environment.Exit(2);new ObsBridge().Read(token).GetAwaiter().GetResult();Environment.Exit(0);}
+            catch {Environment.Exit(1);}
+            return;
+        }
         var plugin=new TrulaPlugin(); plugin.bridge=new ObsBridge();
         try { plugin.Run(args).GetAwaiter().GetResult(); } catch { Diagnostics.Write("connection closed"); }
     }

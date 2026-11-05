@@ -3,6 +3,14 @@ $ErrorActionPreference = 'Stop'
 $source = Join-Path $PSScriptRoot 'dist\com.projectdeck.trula.sdPlugin'
 if (!(Test-Path -LiteralPath "$source\TrulaPlugin.exe")) { & "$PSScriptRoot\Build-Plugin.ps1" }
 $destination = "$env:APPDATA\HotSpot\StreamDock\plugins\com.projectdeck.trula.sdPlugin"
+$protectionReady = $false
+if (Test-Path -LiteralPath "$destination\TrulaObsGuard.exe") {
+    $existingGuard = Start-Process -FilePath "$destination\TrulaObsGuard.exe" -ArgumentList '--check' -WindowStyle Hidden -PassThru -Wait
+    $protectionReady = $existingGuard.ExitCode -eq 0
+}
+if (!$protectionReady -and (Get-Process -Name obs64 -ErrorAction SilentlyContinue)) {
+    throw 'Закройте OBS перед установкой защиты Trula и запустите установщик ещё раз. Это завершит старые незащищённые соединения.'
+}
 $backup = "$env:APPDATA\AjazzPluginManager\Backups\trula-$(Get-Date -Format 'yyyyMMdd-HHmmss-fff')"
 New-Item -ItemType Directory -Path $backup -Force | Out-Null
 $app = Get-Process -Name 'Stream Dock AJAZZ' -ErrorAction SilentlyContinue
@@ -12,7 +20,7 @@ Get-Process TrulaPlugin -ErrorAction SilentlyContinue | Where-Object Path -eq "$
 try {
     if (Test-Path -LiteralPath $destination) { Copy-Item -LiteralPath $destination -Destination "$backup\plugin" -Recurse }
     New-Item -ItemType Directory -Path $destination -Force | Out-Null
-    foreach ($name in @('TrulaPlugin.exe','manifest.json','obs-player.js','twitch-config.json','inspector.js','inspector.html','images')) {
+    foreach ($name in @('TrulaPlugin.exe','TrulaObsGuard.exe','manifest.json','obs-player.js','twitch-config.json','inspector.js','inspector.html','images')) {
         Copy-Item -LiteralPath (Join-Path $source $name) -Destination $destination -Recurse -Force
     }
     foreach ($obsolete in @('bridge.js','Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll','WebView2Loader.dll','WEBVIEW2-LICENSE.txt','WEBVIEW2-NOTICE.txt','TrulaTests.exe')) {
@@ -91,9 +99,19 @@ try {
         }
         $profile | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $ProfilePath -Encoding UTF8
     }
-    if (Test-Path -LiteralPath "$PSScriptRoot\Configure-Obs.ps1") {
-        try { & "$PSScriptRoot\Configure-Obs.ps1" -BackupDirectory (Join-Path $backup 'obs-shortcuts') }
-        catch { Write-Warning "OBS shortcuts could not be configured. Use the plugin launch button. $($_.Exception.Message)" }
+    # A cancelled UAC prompt must never enable an unprotected CDP launch.
+    try {
+        $guard = Join-Path $destination 'TrulaObsGuard.exe'
+        $check = Start-Process -FilePath $guard -ArgumentList '--check' -WindowStyle Hidden -PassThru -Wait
+        if ($check.ExitCode -ne 0) {
+            $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+            $setup = Start-Process -FilePath $guard -ArgumentList @('--install',$sid) -Verb RunAs -WindowStyle Hidden -PassThru -Wait
+            if ($setup.ExitCode -ne 0) { throw 'Windows OBS protection setup failed.' }
+        }
+        & "$PSScriptRoot\Configure-Obs.ps1" -BackupDirectory (Join-Path $backup 'obs-shortcuts')
+    } catch {
+        & "$PSScriptRoot\Configure-Obs.ps1" -BackupDirectory (Join-Path $backup 'obs-shortcuts') -RemoveLegacyOnly
+        throw "OBS protection was not configured. Close any OBS still running with old debug arguments. $($_.Exception.Message)"
     }
     Write-Output "Installed Trula. Backup: $backup"
 } finally {
