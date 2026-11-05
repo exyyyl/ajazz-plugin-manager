@@ -23,7 +23,10 @@ public static class KeyArtwork {
                 }
                 using(var pen=new Pen(Color.White,8) {StartCap=LineCap.Round,EndCap=LineCap.Round,LineJoin=LineJoin.Round})
                 using(var white=new SolidBrush(Color.White)) {
-                    if(kind=="stream-step" || kind=="monitor-step" || kind=="step-volume") {
+                    if(kind=="request") {
+                        g.FillPolygon(white,new[]{new Point(36,34),new Point(36,102),new Point(81,68)});
+                        g.DrawLine(pen,87,98,119,98);g.DrawLine(pen,103,82,103,114);
+                    } else if(kind=="stream-step" || kind=="monitor-step" || kind=="step-volume") {
                         g.FillPolygon(white,new[]{new Point(28,59),new Point(44,59),new Point(66,40),new Point(66,104),new Point(44,85),new Point(28,85)});
                         if(status=="min" || status=="max") {
                             using(var font=new Font("Segoe UI",23,FontStyle.Bold,GraphicsUnit.Pixel))
@@ -83,8 +86,10 @@ public static class KeyArtwork {
                         g.DrawLine(pen,35,110,109,34);
                     }
                     if(error) {
-                        using(var badge=new SolidBrush(background))g.FillEllipse(badge,89,86,40,44);
-                        g.DrawLine(pen,109,94,109,108);g.FillEllipse(white,105,117,8,8);
+                        // Keep the warning in the clear corner, outside the main glyph.
+                        using(var badge=new SolidBrush(Color.FromArgb(255,202,95)))g.FillEllipse(badge,110,8,26,26);
+                        using(var ink=new Pen(Color.FromArgb(60,48,29),3.2f) {StartCap=LineCap.Round,EndCap=LineCap.Round})g.DrawLine(ink,123,14,123,22);
+                        using(var dot=new SolidBrush(Color.FromArgb(60,48,29)))g.FillEllipse(dot,121.3f,26,3.4f,3.4f);
                     }
 
                 }
@@ -94,7 +99,15 @@ public static class KeyArtwork {
             return result;
         }
     }
+    static readonly System.Collections.Generic.Dictionary<string,string> imageCache=new System.Collections.Generic.Dictionary<string,string>();
     public static string Data(string kind,bool active,string status,bool error=false) {
-        using(var bitmap=Render(kind,active,status,error))using(var stream=new MemoryStream()){bitmap.Save(stream,ImageFormat.Png);return "data:image/png;base64,"+Convert.ToBase64String(stream.ToArray());}
+        string key=kind+"|"+active+"|"+status+"|"+error;
+        lock(imageCache) {
+            string cached;if(imageCache.TryGetValue(key,out cached))return cached;
+            using(var bitmap=Render(kind,active,status,error))using(var stream=new MemoryStream()) {
+                bitmap.Save(stream,ImageFormat.Png);string result="data:image/png;base64,"+Convert.ToBase64String(stream.ToArray());
+                if(imageCache.Count>=128)imageCache.Clear();imageCache[key]=result;return result;
+            }
+        }
     }
 }

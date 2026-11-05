@@ -14,9 +14,9 @@ class GenerateArtwork {
    }
    logo.Save(KeyArtwork.LogoPath,ImageFormat.Png);
   }
-  using(var preview=new Bitmap(12*174,3*174))using(var g=Graphics.FromImage(preview)) {
+  using(var preview=new Bitmap(13*174,3*174))using(var g=Graphics.FromImage(preview)) {
    g.Clear(Color.FromArgb(9,13,21));int x=0;
-   foreach(string kind in new[]{"music","stream","monitor","previous","next","connect","chat","stream-volume","monitor-volume","step-volume","stream-step","monitor-step"}) {
+   foreach(string kind in new[]{"music","stream","monitor","previous","next","connect","chat","stream-volume","monitor-volume","step-volume","stream-step","monitor-step","request"}) {
     for(int i=0;i<3;i++) {
      string status=i==2?"НЕТ СВЯЗИ":kind=="music"?(i==0?"ИГРАЕТ":"ПАУЗА"):(i==0?"50%":"БЕЗ ЗВУКА");
      if(kind.EndsWith("-volume") && kind!="step-volume")status=i==0?"first":"alternate";

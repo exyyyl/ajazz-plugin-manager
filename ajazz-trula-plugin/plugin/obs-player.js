@@ -29,8 +29,44 @@ async function(token,command,patch) {
   }
   const initial=contexts();
   const before=initial.player.state.currentTrack?.id;
-  let expected;
-  if(command==='patch') {
+  let expected,queuedRequestId=null;
+  let queueDone=false;
+  if(command==='enqueue') {
+    if(!patch || !/^[A-Za-z0-9-]{1,100}$/.test(patch.requestId))throw Error('Некорректная заявка.');
+    const input=new URL(patch.url), host=input.hostname;
+    let externalId='',platform='';
+    if(input.protocol!=='https:' || input.username || input.password || input.port)throw Error('Неподдерживаемая ссылка.');
+    if(host==='youtu.be'){externalId=input.pathname.slice(1);platform='youtube';}
+    else if(host==='vk.com'){const m=input.pathname.match(/^\/video(-?[0-9]+_[0-9]+)$/);if(m){externalId=m[1];platform='vk';}}
+    if((platform==='youtube' && !/^[A-Za-z0-9_-]{11}$/.test(externalId)) || !platform)throw Error('Неподдерживаемая ссылка.');
+    const receiptsKey='AjazzTrulaAcceptedRequests.v1',queueKey='ForwardTracks';
+    const storedArray=key=>{const raw=localStorage.getItem(key);return !raw||raw==='undefined'||raw==='null'?[]:JSON.parse(raw);};
+    let queue,receipts;
+    try {queue=storedArray(queueKey);receipts=storedArray(receiptsKey);}catch {throw Error('Очередь Trula повреждена. Обновите панель.');}
+    if(!Array.isArray(queue) || !Array.isArray(receipts))throw Error('Неизвестный формат очереди Trula.');
+    if(receipts.includes(patch.requestId) || queue.some(x=>x?._ajazzRequestId===patch.requestId)) {
+      queuedRequestId=patch.requestId;queueDone=true;
+    }else {
+      if(queue.length>=30)throw Error('В очереди следующих треков уже 30 записей.');
+      const response=await fetch('/api/v1/playlist/search?limit=20&offset=0&query='+encodeURIComponent(patch.url),{headers:{token}});
+      if(!response.ok)throw Error('Trula не смогла найти трек по ссылке.');
+      const result=await response.json();
+      const found=(result.data||[]).filter(x=>x.type==='track').map(x=>x.data).find(x=>x?.platform===platform && String(x.externalId)===externalId);
+      if(!found || found.id==null || !found.title)throw Error('Trula не нашла указанный трек.');
+      // Trula consumes ForwardTracks before selecting a new order/background track.
+      // The playlist marker selects music playback/volume, but no playlist is written to the server.
+      const entry={id:'ajazz-'+patch.requestId,track:found,playlist:{id:null,title:'Принятые заявки',type:'playlist'},_ajazzRequestId:patch.requestId};
+      // Re-read immediately before append so a track ending during the search cannot be resurrected.
+      queue=storedArray(queueKey);receipts=storedArray(receiptsKey);
+      if(!Array.isArray(queue) || queue.length>=30 || !Array.isArray(receipts))throw Error('Очередь Trula изменилась. Повторите нажатие.');
+      if(!receipts.includes(patch.requestId) && !queue.some(x=>x?._ajazzRequestId===patch.requestId)) {
+        localStorage.setItem(queueKey,JSON.stringify([...queue,entry]));
+        localStorage.setItem(receiptsKey,JSON.stringify([...receipts,patch.requestId].slice(-1000)));
+        if(!contexts().player.state.currentTrack)contexts().player.setNextTrack();
+      }
+      queuedRequestId=patch.requestId;queueDone=true;
+    }
+  } else if(command==='patch') {
     const response=await fetch('/api/v1/widget/panel/',{method:'PATCH',headers:{token,'Content-Type':'application/json'},body:JSON.stringify(patch)});
     if(!response.ok) throw Error('Settings rejected');
     // Manual volume sliders leave an optimistic overlay over the query data.
@@ -55,9 +91,9 @@ async function(token,command,patch) {
   for(let i=0;i<40;i++) {
     const {player,playback,settings}=contexts();
     const applied=command==='patch' ? Object.entries(patch).every(([section,fields])=>Object.entries(fields).every(([key,v])=>settings[section]?.[key]===v)) : expected!==undefined ? playback.isPlaying===expected : player.state.currentTrack?.id!==before;
-    if(command==='read' || applied) {
+    if(command==='read' || queueDone || applied) {
       const track=player.state.currentTrack?.track;
-      return {...settings,playing:playback.isPlaying,hasTrack:!!player.state.currentTrack,track:track?{title:track.title,platform:track.platform,externalId:track.externalId}:null};
+      return {...settings,queuedRequestId,playing:playback.isPlaying,hasTrack:!!player.state.currentTrack,isPlaylistTrack:!!player.state.currentTrack?.playlist,track:track?{title:track.title,platform:track.platform,externalId:track.externalId}:null};
     }
     await new Promise(resolve=>setTimeout(resolve,100));
   }

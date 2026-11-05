@@ -11,6 +11,9 @@ public class TrulaTests {
         return "[ТЕСТ] "+TrackMessage.Format(state,format);
     }
 
+    static Dictionary<string,object> Redemption(string id,string input,DateTime time,string reward="music",string owner="owner") {
+        return new Dictionary<string,object>{{"id",id},{"user_input",input},{"redeemed_at",time.ToString("o")},{"broadcaster_user_id",owner},{"user_name","Viewer"},{"reward",new Dictionary<string,object>{{"id",reward}}}};
+    }
     static int count;
     static void Equal(object a, object b) { if(!Equals(a,b)) throw new Exception("Expected "+b+", got "+a); count++; }
     static void Reject(Action action) { try { action(); } catch { count++; return; } throw new Exception("Expected rejection"); }
@@ -99,6 +102,54 @@ public class TrulaTests {
         Equal(Commands.StepState(new[]{100,100},"volumeDown"),"max");
         Equal(Commands.StepState(new[]{0,100},"volumeUp"),"up");
         Equal(Commands.StepState(new[]{30,20},"volumeDown"),"down");
+        var audible=Json.Decode(Json.Encode(state));audible["hasTrack"]=true;audible["isPlaylistTrack"]=true;
+        var panelCfg=Commands.Configure("com.projectdeck.trula.monitor",new Dictionary<string,object>());
+        Equal(Commands.Audible(audible,panelCfg),false);
+        audible["isPlaylistTrack"]=false;Equal(Commands.Audible(audible,panelCfg),true);
+        Json.Child(audible,"panel")["orderVolume"]=0;Json.Child(audible,"panel")["playlistVolume"]=80;
+        Equal(Commands.Audible(audible,panelCfg),false);
+        audible["isPlaylistTrack"]=true;Equal(Commands.Audible(audible,panelCfg),true);
+        Equal(Commands.Audible(audible,Commands.Configure("com.projectdeck.trula.stream",new Dictionary<string,object>())),true);
+        var previewConfig=Commands.Configure("com.projectdeck.trula.monitor",new Dictionary<string,object>());
+        var previewRestore=new Dictionary<string,object>{{"panel.orderVolume",42},{"panel.playlistVolume",15}};
+        var preview=Commands.Preview(state,previewConfig,previewRestore);
+        Equal(Json.Child(preview,"panel")["orderVolume"],0);
+        Equal(Json.Child(preview,"source")["orderVolume"],70);
+        Equal(Json.Child(state,"panel")["orderVolume"],30);
+        Equal(previewRestore["panel.orderVolume"],42);
+        var silent=Json.Decode(Json.Encode(state));Json.Child(silent,"panel")["orderVolume"]=0;Json.Child(silent,"panel")["playlistVolume"]=0;
+        preview=Commands.Preview(silent,previewConfig,previewRestore);
+        Equal(Json.Child(preview,"panel")["orderVolume"],42);Equal(Json.Child(preview,"panel")["playlistVolume"],15);
+        Equal(Json.Child(silent,"panel")["orderVolume"],0);
+        Reject(()=>Commands.Preview(silent,previewConfig,new Dictionary<string,object>()));
+        Equal(TrackLink.Canonical("https://www.youtube.com/watch?v=dMMUH_ZpbB0&t=10"),"https://youtu.be/dMMUH_ZpbB0");
+        Equal(TrackLink.Canonical("https://vkvideo.ru/video-12_34"),"https://vk.com/video-12_34");
+        Equal(TrackLink.Extract("Вот трек: https://youtu.be/dMMUH_ZpbB0)."),"https://youtu.be/dMMUH_ZpbB0");
+        Reject(()=>TrackLink.Canonical("https://youtube.com.evil.example/watch?v=dMMUH_ZpbB0"));
+        Reject(()=>TrackLink.Canonical("http://youtu.be/dMMUH_ZpbB0"));
+        Reject(()=>TrackLink.Canonical("https://user:pass@youtu.be/dMMUH_ZpbB0"));
+        Reject(()=>TrackLink.Extract("https://youtu.be/dMMUH_ZpbB0 https://youtu.be/o6ytLPKscrU"));
+        Reject(()=>TrackLink.Extract("просто текст"));
+        var requests=new RequestBook();var now=DateTime.UtcNow;
+        requests.Receive(Redemption("req-1","https://youtu.be/dMMUH_ZpbB0",now),"owner");
+        Equal(Json.Text(requests.Candidate("music",now),"id"),"req-1");
+        requests.Receive(Redemption("old","https://youtu.be/o6ytLPKscrU",now.AddSeconds(-1)),"owner");
+        Equal(Json.Text(requests.Candidate("music",now),"id"),"req-1");
+        requests.Receive(Redemption("foreign","https://youtu.be/o6ytLPKscrU",now.AddSeconds(1),"music","other"),"owner");
+        Equal(Json.Text(requests.Candidate("music",now),"id"),"req-1");
+        requests.Complete("req-1");Reject(()=>requests.Candidate("music",now));
+        requests.Receive(Redemption("req-2","без ссылки",now.AddSeconds(2)),"owner");Reject(()=>requests.Candidate("music",now));
+        requests.Receive(Redemption("req-3","https://youtu.be/o6ytLPKscrU",now.AddSeconds(3)),"owner");
+        Equal(Json.Text(requests.Candidate("music",now.AddSeconds(3)),"id"),"req-3");
+        Reject(()=>requests.Candidate("music",now.AddHours(1)));
+        Reject(()=>requests.Candidate("different",now));
+        requests.Clear();Reject(()=>requests.Candidate("music",now));
+        Equal(TwitchRequests.ValidEndpoint("wss://eventsub.wss.twitch.tv/ws?session=test"),true);
+        Equal(TwitchRequests.ValidEndpoint("wss://eventsub.wss.twitch.tv.evil.example/ws"),false);
+        Equal(TwitchRequests.ValidEndpoint("ws://eventsub.wss.twitch.tv/ws"),false);
+        Equal(TwitchChat.HasScope(Json.Decode("{\"scopes\":[\"user:write:chat\",\"channel:read:redemptions\"]}"),"channel:read:redemptions"),true);
+        Equal(TwitchChat.HasScope(Json.Decode("{\"scopes\":[\"user:write:chat\"]}"),"channel:read:redemptions"),false);
+        Equal(Commands.Configure("com.projectdeck.trula.requests",new Dictionary<string,object>())["command"],"acceptRequest");
         Console.WriteLine(count+" checks passed"); return 0;
     }
 }

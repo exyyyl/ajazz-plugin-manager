@@ -24,7 +24,7 @@ public static class TwitchWindow {
                         try {
                             var device=await TwitchChat.Begin(cancellation.Token);Uri url;
                             if(!Uri.TryCreate(Json.Text(device,"verification_uri"),UriKind.Absolute,out url) || url.Scheme!="https" || (url.Host!="www.twitch.tv" && url.Host!="twitch.tv"))throw new Exception("Неожиданный адрес входа Twitch.");
-                            label.Text="Подтвердите вход в открывшемся браузере.\nКод: "+Json.Text(device,"user_code")+"\n\nТолько разрешение отправлять сообщения в чат.";
+                            label.Text="Подтвердите вход в открывшемся браузере.\nКод: "+Json.Text(device,"user_code")+"\n\nРазрешения: отправка сообщений и чтение заявок за баллы канала.";
                             Process.Start(new ProcessStartInfo(url.AbsoluteUri) {UseShellExecute=true});
                             await TwitchChat.Complete(device,cancellation.Token);
                             if(!window.IsDisposed)window.Close();

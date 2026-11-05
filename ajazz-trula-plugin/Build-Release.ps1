@@ -10,6 +10,7 @@ foreach ($name in @('TrulaPlugin.exe','manifest.json','obs-player.js','twitch-co
 $utf8Bom = New-Object Text.UTF8Encoding($true)
 [IO.File]::WriteAllText("$stage\Install-Plugin.ps1",[IO.File]::ReadAllText("$PSScriptRoot\Install-Plugin.ps1"),$utf8Bom)
 Copy-Item "$PSScriptRoot\README.md" $stage
+[IO.File]::WriteAllText("$stage\Configure-Obs.ps1",[IO.File]::ReadAllText("$PSScriptRoot\Configure-Obs.ps1"),$utf8Bom)
 [IO.File]::WriteAllText("$stage\Install.cmd","@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%~dp0Install-Plugin.ps1`"`r`npause`r`n",[Text.Encoding]::ASCII)
 $zip = Join-Path $release 'Ajazz-Trula-Installer.zip'
 Compress-Archive -Path "$stage\*" -DestinationPath $zip -CompressionLevel Optimal -Force

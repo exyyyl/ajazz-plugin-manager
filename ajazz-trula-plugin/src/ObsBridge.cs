@@ -80,7 +80,13 @@ public sealed class ObsBridge {
                 var message=Json.Decode(Encoding.UTF8.GetString(output.ToArray()));
                 if(Json.Text(message,"id")!="1") continue;
                 var result=Json.Child(message,"result");
-                if(message.ContainsKey("error") || result.ContainsKey("exceptionDetails")) throw new Exception("Панель Trula изменилась или ещё загружается. Обновите панель OBS и повторите.");
+                if(message.ContainsKey("error"))throw new Exception("Панель Trula изменилась или ещё загружается. Обновите панель OBS и повторите.");
+                if(result.ContainsKey("exceptionDetails")) {
+                    string reason=Json.Text(Json.Child(Json.Child(result,"exceptionDetails"),"exception"),"description").Split('\n')[0].Replace("Error: ","").Trim();
+                    string[] known={"Некорректная заявка.","Неподдерживаемая ссылка.","Очередь Trula повреждена. Обновите панель.","Неизвестный формат очереди Trula.","В очереди следующих треков уже 30 записей.","Trula не смогла найти трек по ссылке.","Trula не нашла указанный трек.","Очередь Trula изменилась. Повторите нажатие.","Сейчас не играет заказ из очереди.","Trula не подтвердила удаление заказа из очереди."};
+                    if(Array.IndexOf(known,reason)>=0)throw new Exception(reason);
+                    throw new Exception("Панель Trula изменилась или ещё загружается. Обновите панель OBS и повторите.");
+                }
                 var value=Json.Child(Json.Child(result,"result"),"value");
                 if(!value.ContainsKey("playing")) throw new Exception("Плеер Trula в OBS пока недоступен.");
                 return value;
@@ -90,7 +96,7 @@ public sealed class ObsBridge {
     public Task<Dictionary<string,object>> Read(string token) { return Player(token,"read"); }
     public async Task<Dictionary<string,object>> Call(string token,object command) {
         var item=Json.Decode(Json.Encode(command));
-        if(Json.Text(item,"command")=="patch") return await Player(token,"patch",item["patch"]);
+        if(Json.Text(item,"command")=="patch" || Json.Text(item,"command")=="enqueue") return await Player(token,Json.Text(item,"command"),item["patch"]);
         return await Player(token,Json.Text(item,"command"));
     }
 }

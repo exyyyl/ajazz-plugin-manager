@@ -16,7 +16,6 @@ public sealed class TwitchChat {
     static string PathName {get{return Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"data","twitch.bin");}}
     static string ClientId {get{return Json.Text(Json.Decode(File.ReadAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"twitch-config.json"))),"clientId");}}
     static readonly HttpClient http=new HttpClient {Timeout=TimeSpan.FromSeconds(15)};
-    static readonly Dictionary<string,DateTime> sent=new Dictionary<string,DateTime>();
     static string checkedToken;
     static int loginVersion;
     static Dictionary<string,object> Load() {
@@ -33,6 +32,7 @@ public sealed class TwitchChat {
         }finally {Array.Clear(clear,0,clear.Length);}
     }
     public static string AccountLabel() {try{return "Twitch: "+Json.Text(Load(),"login");}catch{return "Twitch не подключён.";}}
+    public static bool RequestsAllowed() {try{return HasScope(Load(),"channel:read:redemptions");}catch{return false;}}
     public static bool IsConnected() {try {return !string.IsNullOrEmpty(Json.Text(Load(),"access_token"));}catch{return false;}}
     public static void ValidateIdentity(Dictionary<string,object> identity,string expectedClient) {
         if(Json.Text(identity,"client_id")!=expectedClient)throw new Exception("Twitch вернул вход для другого приложения. Подключите Twitch заново.");
@@ -40,12 +40,15 @@ public sealed class TwitchChat {
         if(!scopes.Any(s=>Convert.ToString(s)=="user:write:chat"))throw new Exception("Подключите Twitch с разрешением отправлять сообщения.");
         if(string.IsNullOrEmpty(Json.Text(identity,"user_id")) || string.IsNullOrEmpty(Json.Text(identity,"login")))throw new Exception("Twitch не передал данные аккаунта.");
     }
+    public static bool HasScope(Dictionary<string,object> account,string scope) {
+        object raw;return account.TryGetValue("scopes",out raw) && Json.Array(raw).Any(x=>Convert.ToString(x)==scope);
+    }
     public static bool DeliveryConfirmed(Dictionary<string,object> response) {
         object raw;var data=response.TryGetValue("data",out raw)?Json.Array(raw):new object[0];
         return data.Length==1 && Json.Text(Json.Map(data[0]),"is_sent")=="True";
     }
     public static async Task Disconnect() {
-        Interlocked.Increment(ref loginVersion);TwitchWindow.Cancel();
+        Interlocked.Increment(ref loginVersion);TwitchWindow.Cancel();TwitchRequests.Reset();
         await authGate.WaitAsync();
         try {if(File.Exists(PathName))File.Delete(PathName);if(File.Exists(PathName+".tmp"))File.Delete(PathName+".tmp");checkedToken=null;}
         finally{authGate.Release();}
@@ -54,7 +57,7 @@ public sealed class TwitchChat {
         using(var body=new FormUrlEncodedContent(data))return await http.PostAsync(endpoint,body,cancellation);
     }
     public static async Task<Dictionary<string,object>> Begin(CancellationToken cancellation) {
-        using(var response=await Form("https://id.twitch.tv/oauth2/device",new Dictionary<string,string>{{"client_id",ClientId},{"scopes","user:write:chat"}},cancellation)) {
+        using(var response=await Form("https://id.twitch.tv/oauth2/device",new Dictionary<string,string>{{"client_id",ClientId},{"scopes","user:write:chat channel:read:redemptions"}},cancellation)) {
             if(!response.IsSuccessStatusCode)throw new Exception("Не удалось начать вход Twitch. Повторите позже.");
             return Json.Decode(await response.Content.ReadAsStringAsync());
         }
@@ -66,7 +69,7 @@ public sealed class TwitchChat {
                 if(!response.IsSuccessStatusCode) throw new Exception("Twitch требует повторного входа.");
                 var value=Json.Decode(await response.Content.ReadAsStringAsync());
                 ValidateIdentity(value,ClientId);
-                account["user_id"]=Json.Text(value,"user_id");account["login"]=Json.Text(value,"login");
+                account["scopes"]=value["scopes"];account["user_id"]=Json.Text(value,"user_id");account["login"]=Json.Text(value,"login");
                 account["expiresAt"]=DateTime.UtcNow.AddSeconds(Convert.ToDouble(value["expires_in"])).Ticks;
                 account["validatedAt"]=DateTime.UtcNow.Ticks;
             }
@@ -82,7 +85,7 @@ public sealed class TwitchChat {
                 var result=Json.Decode(await response.Content.ReadAsStringAsync());
                 if(response.IsSuccessStatusCode) {
                     await Validate(result,cancellation);await authGate.WaitAsync(cancellation);
-                    try {cancellation.ThrowIfCancellationRequested();if(version!=Thread.VolatileRead(ref loginVersion))throw new OperationCanceledException();Save(result);}finally{authGate.Release();}return;
+                    try {cancellation.ThrowIfCancellationRequested();if(version!=Thread.VolatileRead(ref loginVersion))throw new OperationCanceledException();Save(result);TwitchRequests.Reset();}finally{authGate.Release();}return;
                 }
                 string error=Json.Text(result,"message",Json.Text(result,"error"));
                 if(error=="authorization_pending")continue;
@@ -92,7 +95,7 @@ public sealed class TwitchChat {
         }
         throw new Exception("Код Twitch устарел. Начните подключение заново.");
     }
-    static async Task<Dictionary<string,object>> Account(bool force=false) {
+    internal static async Task<Dictionary<string,object>> Account(bool force=false) {
         await authGate.WaitAsync();
         try {
             var account=Load();long expires=Convert.ToInt64(account["expiresAt"]),validated=Convert.ToInt64(account["validatedAt"]);
@@ -110,11 +113,11 @@ public sealed class TwitchChat {
             return account;
         }finally {authGate.Release();}
     }
-    static async Task<HttpResponseMessage> Helix(Dictionary<string,object> account,HttpMethod method,string path,object body=null) {
+    internal static async Task<HttpResponseMessage> Helix(Dictionary<string,object> account,HttpMethod method,string path,object body=null,CancellationToken cancellation=default(CancellationToken)) {
         using(var request=new HttpRequestMessage(method,"https://api.twitch.tv/helix/"+path)) {
             request.Headers.Authorization=new AuthenticationHeaderValue("Bearer",Json.Text(account,"access_token"));request.Headers.Add("Client-Id",ClientId);
             if(body!=null)request.Content=new StringContent(Json.Encode(body),Encoding.UTF8,"application/json");
-            return await http.SendAsync(request);
+            return await http.SendAsync(request,cancellation);
         }
     }
     public static Task Send(Dictionary<string,object> state,Dictionary<string,object> cfg) {
@@ -125,16 +128,12 @@ public sealed class TwitchChat {
         await sendGate.WaitAsync();
         try {
             var account=await Account();string broadcaster=Json.Text(account,"user_id");
-            string key=Json.Text(account,"user_id")+":"+broadcaster;DateTime last;
-            if(sent.TryGetValue(key,out last) && (DateTime.UtcNow-last).TotalSeconds<1)throw new Exception("Подождите секунду перед следующим сообщением.");
-            sent[key]=DateTime.UtcNow;
-            var body=new {broadcaster_id=broadcaster,sender_id=Json.Text(account,"user_id"),message};
+var body=new {broadcaster_id=broadcaster,sender_id=Json.Text(account,"user_id"),message};
             var responseMessage=await Helix(account,HttpMethod.Post,"chat/messages",body);
             if(responseMessage.StatusCode==HttpStatusCode.Unauthorized) {responseMessage.Dispose();account=await Account(true);responseMessage=await Helix(account,HttpMethod.Post,"chat/messages",body);}
             using(responseMessage) {
                 if(!responseMessage.IsSuccessStatusCode)throw new Exception("Twitch отклонил отправку. Проверьте разрешения и ограничения чата.");
                 if(!DeliveryConfirmed(Json.Decode(await responseMessage.Content.ReadAsStringAsync())))throw new Exception("Twitch не отправил сообщение: проверьте ограничения чата.");
-                sent[key]=DateTime.UtcNow;
             }
         }finally {sendGate.Release();}
     }

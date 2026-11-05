@@ -91,6 +91,10 @@ try {
         }
         $profile | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $ProfilePath -Encoding UTF8
     }
+    if (Test-Path -LiteralPath "$PSScriptRoot\Configure-Obs.ps1") {
+        try { & "$PSScriptRoot\Configure-Obs.ps1" -BackupDirectory (Join-Path $backup 'obs-shortcuts') }
+        catch { Write-Warning "OBS shortcuts could not be configured. Use the plugin launch button. $($_.Exception.Message)" }
+    }
     Write-Output "Installed Trula. Backup: $backup"
 } finally {
     if ($appPath) { Start-Process -FilePath $appPath -WorkingDirectory (Split-Path $appPath) -WindowStyle Hidden }
