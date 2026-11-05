@@ -1,4 +1,5 @@
-function normalizeEvent(message) {
+function normalizeEvent(message, pluginUUID) {
+  if (message.event === 'didReceiveGlobalSettings' && pluginUUID && !message.context) message.context = pluginUUID;
   if (!message.action?.startsWith('com.elgato.discord.') || !message.payload) return message;
   if (['willAppear', 'willDisappear', 'keyDown', 'keyUp', 'didReceiveSettings'].includes(message.event) && !message.payload.controller) {
     message.payload.controller = 'Keypad';

@@ -23,3 +23,9 @@ test('explicit multi action state and property inspector data are preserved', ()
     assert.deepEqual(message, original);
   }
 });
+
+test('global settings from AJAZZ get the registered plugin context without changing stored values',()=>{
+ const settings={example:true};const message={event:'didReceiveGlobalSettings',payload:{settings}};
+ normalizeEvent(message,'plugin-instance');assert.equal(message.context,'plugin-instance');assert.equal(message.payload.settings,settings);
+ const present={event:'didReceiveGlobalSettings',context:'original',payload:{settings}};normalizeEvent(present,'other');assert.equal(present.context,'original');
+});

@@ -6,6 +6,8 @@ const { spawn } = require('node:child_process');
 const { normalizeEvent } = require('./compatibility.cjs');
 const args = process.argv.slice(2);
 const portIndex = args.indexOf('-port') + 1;
+const uuidIndex = args.indexOf('-pluginUUID') + 1;
+const pluginUUID = uuidIndex ? args[uuidIndex] : undefined;
 if (!portIndex) throw new Error('Missing -port');
 const log = (text) => {
   const file = path.join(__dirname, 'bridge.log');
@@ -44,7 +46,8 @@ const server = net.createServer(socket => {
       upstream.onclose = () => { socket.end(); child?.kill(); server.close(); };
       upstream.onmessage = event => {
         const message = JSON.parse(event.data);
-        normalizeEvent(message);
+        normalizeEvent(message, pluginUUID);
+        if (message.event === 'didReceiveGlobalSettings') log('global settings received context=' + !!message.context + ' settingsPresent=' + !!message.payload?.settings + ' fields=' + Object.keys(message.payload?.settings || {}).filter(k => /auth|token|expir/i.test(k)).join(','));
         log('host ' + message.event + ' action=' + (message.action || '') + ' controller=' + (message.payload?.controller || '') + ' state=' + message.payload?.state + ' context=' + message.context + ' device=' + message.device);
         socket.write(frame(JSON.stringify(message)));
       };
@@ -68,7 +71,13 @@ const server = net.createServer(socket => {
       if (message.event === 'logMessage') {
         const value = JSON.stringify(message.payload || {});
         const tags = value.match(/\b(?:ERROR|INVALID_SCOPE|AUTHENTICATE|AUTHORIZE|GET_VOICE_SETTINGS|SET_VOICE_SETTINGS|ECONNREFUSED|ECONNRESET|[45]\d\d\d?|error|failed|connect|disconnect|scope|invalid|timeout|closed|ready|succeeded|success)\b/gi) || [];
-        log('diagnostic ' + tags.join(' ').slice(0, 600));
+        const reasons = [
+          [/invalid_grant/i, 'invalid_grant'], [/invalid_token/i, 'invalid_token'],
+          [/access_denied/i, 'access_denied'], [/unauthorized_client/i, 'unauthorized_client'],
+          [/token.{0,12}expired/i, 'token_expired'], [/token.{0,12}revoked/i, 'token_revoked'],
+          [/invalid.{0,12}scope/i, 'invalid_scope'],
+        ].filter(([pattern]) => pattern.test(value)).map(([, reason]) => reason);
+        log('diagnostic ' + tags.join(' ').slice(0, 600) + ' reasons=' + reasons.join(','));
       }
       log('plugin ' + message.event + ' state=' + message.payload?.state + ' context=' + message.context + ' disabled=' + !!message.payload?.disabled + ' unauthorized=' + !!message.payload?.unauthorized + ' underauthorized=' + !!message.payload?.underauthorized);
       if (upstream?.readyState === 1) upstream.send(fragment); else queue.push(fragment);
