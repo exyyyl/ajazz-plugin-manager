@@ -1,0 +1,21 @@
+[
+  {"id":"record","asset":"record","inspector":"source/actions/record/action_record_inspector.html","stateImages":["on","off"]},
+  {"id":"record.pause","asset":"record.pause","inspector":"source/actions/record_pause/action_record_pause_inspector.html","stateImages":["on","off"]},
+  {"id":"record.addchapter","asset":"record.addchapter","inspector":"source/actions/record_add_chapter/action_record_add_chapter_inspector.html","stateImages":["inactive"]},
+  {"id":"stream","asset":"stream","inspector":"source/actions/stream/action_stream_inspector.html","stateImages":["on","off"]},
+  {"id":"virtualcam","asset":"virtualcam","inspector":"source/actions/virtualcam/action_virtualcam_inspector.html","stateImages":["on","off"]},
+  {"id":"replaybuffer","asset":"replaybuffer","inspector":"source/actions/replaybuffer/action_replaybuffer_inspector.html","stateImages":["on","off"]},
+  {"id":"replaybuffer.save","asset":"replaybuffer.save","inspector":"source/actions/replaybuffer_save/action_replaybuffer_save_inspector.html","stateImages":["on"]},
+  {"id":"scenecollection","asset":"scene_collection","inspector":"source/actions/scene_collection/action_scene_collection_inspector.html","stateImages":["on"]},
+  {"id":"profile","asset":"profile","inspector":"source/actions/profile/action_profile_inspector.html","stateImages":["on"]},
+  {"id":"scene","asset":"scene","inspector":"source/actions/scene/action_scene_inspector.html","stateImages":["on"]},
+  {"id":"source","asset":"scene.item.visibility","inspector":"source/actions/sceneitem_visibility/action_sceneitem_visibility_inspector.html","stateImages":["on","off"]},
+  {"id":"mixeraudio","asset":"com.elgato.obsstudio.mixeraudio","inspector":"source/actions/com.elgato.obsstudio.mixeraudio/inspector.html","stateImages":["on","off"]},
+  {"id":"mixeraudio.volume","asset":"source.audio.volume","inspector":"source/actions/source_audio_volume/action_source_audio_volume_inspector.html","stateImages":["on","off"]},
+  {"id":"source.media","asset":"source.media","inspector":"source/actions/source_media/action_source_media_inspector.html","stateImages":["play-on","play-off","stop-off","start-on"]},
+  {"id":"studiomode","asset":"studiomode","inspector":"source/actions/studiomode/action_studiomode_inspector.html","stateImages":["on","off"]},
+  {"id":"transitionstudio","asset":"transition_studio","inspector":"source/actions/transition_studio/action_transition_studio_inspector.html","stateImages":["on"]},
+  {"id":"filter.state","asset":"filter.state","inspector":"source/actions/filter_state/action_filter_state_inspector.html","stateImages":["on","off"]},
+  {"id":"screenshot","asset":"screenshot","inspector":"source/actions/screenshot/action_screenshot_inspector.html","stateImages":["on"]},
+  {"id":"transition","asset":"transition","inspector":"source/actions/transition/action_transition_inspector.html","stateImages":["on"]}
+]
